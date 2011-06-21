@@ -1,0 +1,35 @@
+Name:			tremulous-query
+Version:		2
+Author:			Christoffer Öjeling
+Maintainer:		cadynum@gmail.com
+License:		GPL
+License-File:		LICENSE
+Category:		Network
+Synopsis:		Tremulous polling utils and libraries
+Description:		Placeholder....
+
+Cabal-Version:		>= 1.2
+Build-Type:		Simple
+Data-Files:
+Tested-With:            GHC==7.0.2
+
+
+Library
+  Extensions:           BangPatterns ViewPatterns NamedFieldPuns
+                        StandaloneDeriving RecordWildCards
+                        GeneralizedNewtypeDeriving FlexibleInstances FlexibleContexts
+                        TypeSynonymInstances ScopedTypeVariables DoAndIfThenElse OverloadedStrings
+  Exposed-Modules:
+                        Tremulous.Protocol
+                        Tremulous.Polling
+                        Tremulous.Util
+                        Tremulous.NameInsensitive
+                        Tremulous.SocketExtensions
+                        Tremulous.ByteStringUtils
+
+  Build-Depends:        base>=4.3, array, old-time, network, mtl, stm, deepseq, containers, strict-concurrency,
+                        bytestring, attoparsec
+  Ghc-Prof-Options:	-prof -auto-all -caf-all
+  Ghc-Options:          -threaded
+
+
