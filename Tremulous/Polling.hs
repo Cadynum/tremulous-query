@@ -100,11 +100,11 @@ pollMasters masterservers = do
 				start <- atomically (readTMVar pingInit)
 				let gameping = fromInteger (now - start) 
 					`div` 1000
-				if S.member host t
-					then putMVar tstate t
-					else do
-						putMVar tstate $ S.insert host t
-						writeChan servers (Just x {gameping})
+				if S.member host t then
+					putMVar tstate t
+				else do
+					putMVar tstate $ S.insert host t
+					writeChan servers (Just x {gameping})
 				return True
 
 			Just Invalid -> return True
