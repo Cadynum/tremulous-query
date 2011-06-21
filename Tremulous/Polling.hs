@@ -57,8 +57,7 @@ pollMasters masterservers = do
 
 	forkIO . whileJust resendPacketsTimes $ \n -> do
 		threadDelay polltimeout
-		if n == 0
-		then do
+		if n == 0 then do
 			killThread recvThread
 			writeChan chan Nothing
 			return Nothing
