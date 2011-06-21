@@ -26,7 +26,6 @@ import Data.ByteString.Char8 (ByteString, append, pack)
 import System.Time
 
 import Tremulous.Protocol
-import Tremulous.SocketExtensions
 import Tremulous.ByteStringUtils as B
 
 polltimeout, singlepolltimeout, resendPacketsTimes :: Int
@@ -151,16 +150,20 @@ parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" cont
 
 
 
-pollOne :: DNSEntry -> IO (Maybe GameServer)
-pollOne DNSEntry{dnsAddress, dnsFamily} = do
-	s <- socket dnsFamily Datagram defaultProtocol
+pollOne :: SockAddr -> IO (Maybe GameServer)
+pollOne sockaddr = do
+	s <- socket AF_INET Datagram defaultProtocol
 	catch (f s) (err s)
 	where
 	f sock = do
-		connect sock dnsAddress
+		connect sock sockaddr
 		send sock getStatus
-		poll <- timeout singlepolltimeout $ recv sock 1500
-		return $ parseGameServer dnsAddress =<< isProper =<< poll
+		start	<- getMicroTime
+		poll	<- timeout singlepolltimeout $ recv sock 1500
+		stop	<- getMicroTime
+		let gameping = fromInteger (stop - start) `div` 1000
+		return $ (\x -> x {gameping}) <$> 
+			(parseGameServer sockaddr =<< isProper =<< poll)
 	err sock (_::IOError) = sClose sock >> return Nothing
 	isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
 
