@@ -1,6 +1,6 @@
 module Tremulous.Protocol (
 	  module Tremulous.NameInsensitive
-	, Team(..),  GameServer(..), Player(..), MasterServer(..)
+	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..)
 	, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
@@ -17,9 +17,14 @@ import Data.Char as C
 import Data.Bits
 
 import Tremulous.ByteStringUtils as B
-import Tremulous.SocketExtensions
+import Tremulous.SocketExtensions ()
 import Tremulous.NameInsensitive
 
+data Delay = Delay {
+	  resendWait
+	, resendTimes
+	, outBufferDelay	:: !Int
+	} deriving (Show, Read)
 
 data MasterServer = MasterServer {
 	  protocol	:: !Int

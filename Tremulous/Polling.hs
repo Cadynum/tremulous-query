@@ -27,18 +27,16 @@ import System.Time
 import Tremulous.Protocol
 import Tremulous.ByteStringUtils as B
 
-polltimeout, singlepolltimeout, resendPacketsTimes :: Int
-polltimeout		= 400*1000
-singlepolltimeout	= 800*1000
-resendPacketsTimes	= 3
+mtu :: Int
+mtu = 1500
 
 getStatus :: IsString s => s
 getStatus = "\xFF\xFF\xFF\xFFgetstatus"
 getServers :: Int -> ByteString
 getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
 
-pollMasters :: [MasterServer] -> IO [GameServer]
-pollMasters masterservers = do
+pollMasters :: Delay -> [MasterServer] -> IO [GameServer]
+pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	chan		<- newChan --Packets will be streamed here
 	--mstate		<- newMVar S.empty --Current masterlist
@@ -48,26 +46,37 @@ pollMasters masterservers = do
 	tstate		<- newMVar S.empty
 	-- When first packet was sent to server
 	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
-	recvThread	<- forkIO . forever $ (writeChan chan . Just) =<< recvFrom sock 1500
-	servers		<- newChan --The incoming data will be sent here
+	recvThread	<- forkIO . forever $ (writeChan chan . Just) =<< recvFrom sock mtu
+	-- The incoming data will be sent here
+	servers		<- newChan
+
+	outchan		<- newChan :: IO (Chan (ByteString, SockAddr))
+	
+	outbuffer <- forkIO $ forever $ do
+		(packet, to)	<- readChan outchan
+		sendTo sock packet to
+		threadDelay outBufferDelay
+		
+	let bufferedSendTo a b = writeChan outchan (a, b)
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
-	forkIO . replicateM_ resendPacketsTimes $ do
-		mapM_ (\(MasterServer protocol masterHost) -> sendTo sock (getServers protocol) masterHost) masterservers
+	forkIO . replicateM_ resendTimes $ do
+		mapM_ (\(MasterServer protocol masterHost) -> bufferedSendTo (getServers protocol) masterHost) masterservers
 		threadDelay (200*1000)
 
-	forkIO . whileJust resendPacketsTimes $ \n -> do
-		threadDelay polltimeout
+	forkIO . whileJust resendTimes $ \n -> do
+		threadDelay resendWait
 		if n == 0 then do
 			killThread recvThread
+			killThread outbuffer
 			writeChan chan Nothing
 			return Nothing
 		else do
 			m <- M.elems <$> readMVar mstate
 			t <- readMVar tstate
 			let deltas = concatMap (S.toList) $ map (`S.difference` t) m
-			mapM_ (sendTo sock getStatus) deltas
+			mapM_ (bufferedSendTo getStatus) deltas
 			return (Just (n-1))
 
 
@@ -87,7 +96,7 @@ pollMasters masterservers = do
 				putMVar mstate $ M.insertWith S.union host m' mvar
 				let delta = S.difference x m
 				when (S.size m' > S.size m) $ do
-					mapM_ (sendTo sock getStatus) delta
+					mapM_ (bufferedSendTo getStatus) delta
 
 				-- set timestamp of sent packet
 				now <- getMicroTime
@@ -145,8 +154,7 @@ whenJust x f = case x of
 	Nothing	-> return ()
 
 
--- GameServer might not be needed, thus not strict.
-data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr GameServer | Invalid
+data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
 parsePacket :: [SockAddr] -> (ByteString, SockAddr) -> Packet
 parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" content of
@@ -159,8 +167,8 @@ parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" cont
 
 
 
-pollOne :: SockAddr -> IO (Maybe GameServer)
-pollOne sockaddr = do
+pollOne :: Delay -> SockAddr -> IO (Maybe GameServer)
+pollOne Delay{..} sockaddr = do
 	s <- socket AF_INET Datagram defaultProtocol
 	catch (f s) (err s)
 	where
@@ -168,7 +176,7 @@ pollOne sockaddr = do
 		connect sock sockaddr
 		send sock getStatus
 		start	<- getMicroTime
-		poll	<- timeout singlepolltimeout $ recv sock 1500
+		poll	<- timeout resendWait $ recv sock mtu
 		stop	<- getMicroTime
 		let gameping = fromInteger (stop - start) `div` 1000
 		return $ (\x -> x {gameping}) <$> 
