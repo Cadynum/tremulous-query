@@ -39,6 +39,11 @@ mkColorAlpha :: ByteString -> TI
 mkColorAlpha bs = TI bs (B.map toLower $ B.filter isPrint $ removeColors bs)
 
 removeColors :: ByteString -> ByteString
-removeColors = pack . Prelude.foldr f [] . unpack where
-	f '^' (x:xs) | x /= '^'	= xs
-	f x xs			= x : xs
+removeColors = B.pack . rc . B.unpack
+
+rc :: String -> String
+rc ('^' : x : xs) | isAlphaNum x	= rc xs
+rc (x : xs)				= x : rc xs
+rc [] 					= []
+
+

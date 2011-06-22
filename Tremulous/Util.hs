@@ -3,6 +3,7 @@ module Tremulous.Util (
 	, search
 	, makePlayerList
 	, toPlayerList
+	, playerList
 	, stats
 	, partitionTeams
 	, ircifyColors
@@ -54,9 +55,9 @@ playerList = foldr ((++) . T.players) []
 
 removeColors, ircifyColors, webifyColors :: String -> String
 
-removeColors = foldr f [] where
-	f '^' (x:xs) | x /= '^'	= xs
-	f x xs			= x : xs
+removeColors ('^' : x : xs) | isAlphaNum x	= removeColors xs
+removeColors (x : xs)				= x : removeColors xs
+removeColors [] 				= []
 
 ircifyColors = foldr f "\SI" where
 	f '^' (x:xs) | x >= '0' && x <= '9'	= mc!x ++ xs
