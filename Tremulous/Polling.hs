@@ -11,7 +11,6 @@ import System.IO.Unsafe
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan.Strict
 import Control.Concurrent.MVar.Strict
-import Control.Concurrent.STM
 import Data.Foldable
 import Control.Monad hiding (mapM_, sequence_)
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
@@ -43,11 +42,14 @@ pollMasters masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	chan		<- newChan --Packets will be streamed here
 	--mstate		<- newMVar S.empty --Current masterlist
+	-- (master address, server addresses given by said master)
 	mstate		<- newMVar $ ((M.fromList $ map (\x -> (masterHost x, S.empty)) masterservers) :: (Map SockAddr (Set SockAddr)))
+	-- Servers that has responded
 	tstate		<- newMVar S.empty
+	-- When first packet was sent to server
+	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
 	recvThread	<- forkIO . forever $ (writeChan chan . Just) =<< recvFrom sock 1500
 	servers		<- newChan --The incoming data will be sent here
-	pingInit	<- atomically newEmptyTMVar
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
@@ -83,23 +85,30 @@ pollMasters masterservers = do
 				let m = M.findWithDefault S.empty host mvar
 				let m' = S.union m x
 				putMVar mstate $ M.insertWith S.union host m' mvar
+				let delta = S.difference x m
 				when (S.size m' > S.size m) $ do
-					mapM_ (sendTo sock getStatus) (S.difference x m)
-				
+					mapM_ (sendTo sock getStatus) delta
+
+				-- set timestamp of sent packet
 				now <- getMicroTime
-				atomically $ do
-					tst <-isEmptyTMVar pingInit
-					when tst $
-						putTMVar pingInit now
+				ps <- takeMVar pingstate
+				let ps' = M.union ps (M.fromAscList $ map (,now) (S.toAscList delta))
+				putMVar pingstate ps'
+
 					
 				return True
 
 			Just (Tremulous host x) -> do
 				t <- takeMVar tstate
 				now <- getMicroTime
-				start <- atomically (readTMVar pingInit)
-				let gameping = fromInteger (now - start) 
-					`div` 1000
+
+				-- I cant think of a single time this would be Nothing,
+				-- but just in case :)
+				start <- M.lookup host <$> readMVar pingstate
+				let gameping = case start of
+					Just a	-> fromInteger (now - a) `div` 1000
+					Nothing	-> -1
+					
 				if S.member host t then
 					putMVar tstate t
 				else do
