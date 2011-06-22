@@ -104,13 +104,13 @@ pollMasters masterservers = do
 				if S.member host t then
 					putMVar tstate t
 				else do
+					putMVar tstate $ S.insert host t
 					-- This also servers as protection against
 					-- receiving responses for requests never sent
 					start <- M.lookup host <$> readMVar pingstate
 					whenJust start $ \a -> do
 						let gameping = fromInteger (now - a) `div` 1000
-						putMVar tstate $ S.insert host t
-						writeChan servers (Just x {gameping})
+						writeChan servers (Just x {gameping})					
 				return True
 
 			Just Invalid -> return True
