@@ -99,21 +99,18 @@ pollMasters masterservers = do
 				return True
 
 			Just (Tremulous host x) -> do
-				t <- takeMVar tstate
 				now <- getMicroTime
-
-				-- I cant think of a single time this would be Nothing,
-				-- but just in case :)
-				start <- M.lookup host <$> readMVar pingstate
-				let gameping = case start of
-					Just a	-> fromInteger (now - a) `div` 1000
-					Nothing	-> -1
-					
+				t <- takeMVar tstate
 				if S.member host t then
 					putMVar tstate t
 				else do
-					putMVar tstate $ S.insert host t
-					writeChan servers (Just x {gameping})
+					-- This also servers as protection against
+					-- receiving responses for requests never sent
+					start <- M.lookup host <$> readMVar pingstate
+					whenJust start $ \a -> do
+						let gameping = fromInteger (now - a) `div` 1000
+						putMVar tstate $ S.insert host t
+						writeChan servers (Just x {gameping})
 				return True
 
 			Just Invalid -> return True
@@ -142,10 +139,14 @@ whileJust x f  = f x >>= \c -> case c of
 	Just a	-> whileJust a f
 	Nothing	-> return ()
 
+whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
+whenJust x f = case x of
+	Just a	-> f a
+	Nothing	-> return ()
 
 
-
-data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
+-- GameServer might not be needed, thus not strict.
+data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr GameServer | Invalid
 
 parsePacket :: [SockAddr] -> (ByteString, SockAddr) -> Packet
 parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" content of
