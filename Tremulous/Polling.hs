@@ -65,9 +65,9 @@ pollMasters Delay{..} masterservers = do
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
-	forkIO . replicateM_ (resendTimes + 1) $ do
+	forkIO . replicateM_ 4 $ do
 		mapM_ (\(MasterServer protocol masterHost) -> bufferedSendTo (getServers protocol) masterHost) masterservers
-		threadDelay (200*1000)
+		threadDelay (100*1000)
 
 	forkIO . whileJust resendTimes $ \n -> do
 		threadDelay resendWait
