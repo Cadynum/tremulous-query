@@ -6,8 +6,16 @@ import Tremulous.SocketExtensions
 import Data.Maybe
 import Control.Applicative
 import Data.ByteString.Char8
+import Control.Monad
 
-delay = Delay (400*1000) 3 0
+delay = Delay (800*1000) 1 (5000)
+data DNSEntry = DNSEntry {dnsFamily :: !Family, dnsAddress :: !SockAddr} deriving Show
+
+getDNS :: String -> String -> IO DNSEntry
+
+getDNS host_ port_ = do
+	AddrInfo _ family _ _ addr _ <- Prelude.head `liftM` getAddrInfo Nothing (Just host_) (Just port_)
+	return $ DNSEntry family addr
 
 
 main = do

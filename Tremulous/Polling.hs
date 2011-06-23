@@ -65,7 +65,7 @@ pollMasters Delay{..} masterservers = do
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
-	forkIO . replicateM_ resendTimes $ do
+	forkIO . replicateM_ (resendTimes + 1) $ do
 		mapM_ (\(MasterServer protocol masterHost) -> bufferedSendTo (getServers protocol) masterHost) masterservers
 		threadDelay (200*1000)
 
@@ -77,9 +77,9 @@ pollMasters Delay{..} masterservers = do
 			writeChan chan Nothing
 			return Nothing
 		else do
-			m <- M.elems <$> readMVar mstate
+			m <- S.unions . M.elems <$> readMVar mstate
 			t <- readMVar tstate
-			let deltas = concatMap (S.toList) $ map (`S.difference` t) m
+			let deltas = S.toList $  t `S.difference` m
 			mapM_ (bufferedSendTo getStatus) deltas
 			return (Just (n-1))
 
