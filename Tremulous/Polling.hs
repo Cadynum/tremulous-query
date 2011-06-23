@@ -54,6 +54,10 @@ pollMasters Delay{..} masterservers = do
 	
 	outbuffer <- forkIO $ forever $ do
 		(packet, to)	<- readChan outchan
+		-- set timestamp of sent packet
+		now <- getMicroTime
+		x <- takeMVar pingstate
+		putMVar pingstate $ M.insertWith' (\_ b -> b) to now x
 		sendTo sock packet to
 		threadDelay outBufferDelay
 		
@@ -98,13 +102,6 @@ pollMasters Delay{..} masterservers = do
 				when (S.size m' > S.size m) $ do
 					mapM_ (bufferedSendTo getStatus) delta
 
-				-- set timestamp of sent packet
-				now <- getMicroTime
-				ps <- takeMVar pingstate
-				let ps' = M.union ps (M.fromAscList $ map (,now) (S.toAscList delta))
-				putMVar pingstate ps'
-
-					
 				return True
 
 			Just (Tremulous host x) -> do
