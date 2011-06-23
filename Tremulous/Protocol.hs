@@ -41,6 +41,9 @@ data GameServer = GameServer {
 	, slots
 	, privslots	:: !Int
 	, protected	:: !Bool
+	, timelimit
+	, suddendeath	:: !(Maybe Int)
+	, unlagged	:: !(Maybe Bool)
 	, nplayers	:: !Int
 	, players	:: ![Player]
 	}
@@ -62,9 +65,9 @@ instance NFData MasterServer where
 instance NFData Team
 
 instance NFData GameServer where
-	rnf (GameServer a b c d e f g h i j k) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
+	rnf (GameServer a b c d e f g h i j k l m n) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
 		`seq` rnf e `seq` rnf f `seq` rnf g `seq` rnf h `seq` rnf i `seq` rnf j 
-		`seq` rnf k
+		`seq` rnf k `seq` rnf l `seq` rnf m `seq` rnf n
 
 instance NFData Player where
 	rnf (Player a b c d)  = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
@@ -132,7 +135,10 @@ parseGameServer address xs = case splitlines xs of
 		
 		let privslots	= fromMaybe 0 $ (look "sv_privateClients" >>= maybeInt)
 		slots		<- subtract privslots <$> (maybeInt =<< look "sv_maxclients")
-		
+
+		let timelimit	= maybeInt =<< look "timelimit"
+		let suddendeath	= maybeInt =<< look "g_suddenDeathTime"
+		let unlagged	= (/="0") <$> look "g_unlagged"
 		
 		return GameServer { gameping = -1, ..}
 		where
