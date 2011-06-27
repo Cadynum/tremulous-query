@@ -25,12 +25,12 @@ serverByAddress add =  find (\x -> add == address x)
 
 search :: String -> [GameServer] -> [(TI, GameServer)]
 search ""	= makePlayerList 
-search rawstr	= filter (\(a,_) -> str `B.isInfixOf` (cleanedCase) a ) . makePlayerList 
+search rawstr	= filter (\(a,_) -> str `B.isInfixOf` cleanedCase a ) . makePlayerList 
 	where
 	str	= B.pack $ map toLower rawstr
 	
 makePlayerList :: [GameServer] -> [(TI, GameServer)]
-makePlayerList = concatMap $ \x -> map (\a -> (a, x)) (map name $ players x)
+makePlayerList = concatMap $ \x -> map ((\a -> (a, x)) . name) (players x)
 
 toPlayerList :: [GameServer] -> [(Player, GameServer)]
 toPlayerList = concatMap $ \x -> map (\a -> (a, x)) (players x)

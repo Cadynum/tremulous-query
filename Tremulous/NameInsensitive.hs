@@ -4,7 +4,7 @@ module Tremulous.NameInsensitive (
 import Data.ByteString.Char8 as B
 import Data.Char
 import Control.DeepSeq
-import Data.Function (on)
+import Data.Ord
 
 data TI = TI { 
 	  original :: !ByteString
@@ -18,7 +18,7 @@ instance Eq TI where
 	a == b = cleanedCase a == cleanedCase b
 	
 instance Ord TI where
-	compare = compare `on` cleanedCase
+	compare = comparing cleanedCase
 	
 instance Show TI where
 	show = show . original

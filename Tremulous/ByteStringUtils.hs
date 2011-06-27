@@ -8,10 +8,9 @@ import Control.DeepSeq
 instance NFData ByteString 
 
 stripPrefix :: ByteString -> ByteString -> Maybe ByteString
-stripPrefix p xs = if isPrefixOf p xs
-	then Just $ B.drop (B.length p) xs
-	else Nothing
-	
+stripPrefix p xs
+	| p `isPrefixOf` xs	= Just $ B.drop (B.length p) xs
+	| otherwise		= Nothing	
 
 maybeInt :: ByteString -> Maybe Int
 maybeInt x = fst <$> readInt x

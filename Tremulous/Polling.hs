@@ -6,7 +6,6 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 
 import System.Timeout
-import System.IO.Unsafe
 
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan.Strict
@@ -55,8 +54,8 @@ pollMasters Delay{..} masterservers = do
 	outbuffer <- forkIO $ forever $ do
 		(packet, to)	<- readChan outchan
 		-- set timestamp of sent packet
-		now <- getMicroTime
-		x <- takeMVar pingstate
+		now		<- getMicroTime
+		x		<- takeMVar pingstate
 		putMVar pingstate $ M.insertWith' (\_ b -> b) to now x
 		sendTo sock packet to
 		threadDelay outBufferDelay
@@ -65,7 +64,7 @@ pollMasters Delay{..} masterservers = do
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
-	forkIO . replicateM_ 4 $ do
+	forkIO . replicateM_ 3 $ do
 		mapM_ (\(MasterServer protocol masterHost) -> bufferedSendTo (getServers protocol) masterHost) masterservers
 		threadDelay (100*1000)
 
@@ -123,7 +122,7 @@ pollMasters Delay{..} masterservers = do
 	lazyList servers
 
 	where
-	lazyList c = unsafeInterleaveIO $ do
+	lazyList c = do
 		x <- readChan c
 		case x of
 			Just a	-> liftM (a:) (lazyList c)

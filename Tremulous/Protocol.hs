@@ -133,7 +133,7 @@ parseGameServer address xs = case splitlines xs of
 		
 		let protected	=  fromMaybe False $ (/="0") <$> look "g_needpass"
 		
-		let privslots	= fromMaybe 0 $ (look "sv_privateClients" >>= maybeInt)
+		let privslots	= fromMaybe 0 (look "sv_privateClients" >>= maybeInt)
 		slots		<- subtract privslots <$> (maybeInt =<< look "sv_maxclients")
 
 		let timelimit	= maybeInt =<< look "timelimit"
