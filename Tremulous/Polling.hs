@@ -6,6 +6,7 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 
 import System.Timeout
+import System.IO.Unsafe
 
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan.Strict
@@ -122,7 +123,7 @@ pollMasters Delay{..} masterservers = do
 	lazyList servers
 
 	where
-	lazyList c = do
+	lazyList c = unsafeInterleaveIO $ do
 		x <- readChan c
 		case x of
 			Just a	-> liftM (a:) (lazyList c)

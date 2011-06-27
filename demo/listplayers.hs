@@ -8,9 +8,9 @@ import Control.Monad
 delay = Delay (800*1000) 1 (5000)
 
 getDNS :: String -> String -> IO SockAddr
-getDNS host port = do
+getDNS host port =  do
 	AddrInfo _ _ _ _ addr _ <- Prelude.head `liftM` getAddrInfo Nothing (Just host) (Just port)
-	return $ addr
+	return $  addr
 
 
 main = withSocketsDo $ do

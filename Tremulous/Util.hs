@@ -30,7 +30,7 @@ search rawstr	= filter (\(a,_) -> str `B.isInfixOf` cleanedCase a ) . makePlayer
 	str	= B.pack $ map toLower rawstr
 	
 makePlayerList :: [GameServer] -> [(TI, GameServer)]
-makePlayerList = concatMap $ \x -> map ((\a -> (a, x)) . name) (players x)
+makePlayerList = concatMap $ \x -> map (\a -> (name a, x)) (players x)
 
 toPlayerList :: [GameServer] -> [(Player, GameServer)]
 toPlayerList = concatMap $ \x -> map (\a -> (a, x)) (players x)
@@ -40,7 +40,6 @@ stats polled = (tot, players, bots) where
 	tot		= length polled
 	(players, bots) = foldl' trv (0, 0) (playerList polled)
 	trv (!p, !b) x	= if ping x == 0 then (p, b+1) else (p+1, b)
-
 
 partitionTeams :: [Player] -> ([Player], [Player], [Player], [Player])
 partitionTeams = foldr f ([], [], [], []) where

@@ -8,13 +8,15 @@ import Prelude as P hiding (foldl)
 import Network.Socket
 import Control.Applicative
 import Control.DeepSeq
-import Data.Attoparsec.Char8
+import Data.Attoparsec.Char8 as A
+import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 
 import Data.Maybe
 import Data.String
 import Data.Char as C
 import Data.Bits
+import Data.Word
 
 import Tremulous.ByteStringUtils as B
 import Tremulous.SocketExtensions ()
@@ -155,16 +157,25 @@ parseGameServer address xs = case splitlines xs of
 
 -- Should be replaced
 parseMasterServer :: ByteString -> [SockAddr]	
-parseMasterServer = cycleoutIP . unpack
+parseMasterServer = fromMaybe [] . parseMaybe attoIP
+	where
+	attoIP = A.many (char '\\' *> addr)
+	(.<<.) :: Bits a => a -> Int -> a
+	(.<<.) = shiftL		
+	wg :: Integral i => Parser i
+	wg = fromIntegral <$> anyWord8	
+	addr = do
+		-- try $ string "EOT\0\0\0" *> endOfInput
+		i0 <- wg
+		i1 <- wg
+		i2 <- wg
+		i3 <- wg
+		p0 <- wg
+		p1 <- wg
+		let ip = (i3 .<<. 24) .|. (i2 .<<. 16) .|. (i1 .<<. 8) .|. i0 :: Word32
+		let port = (p0 .<<. 8) .|. p1 :: Word16
+		return $ SockAddrInet (fromIntegral port) ip
 
-cycleoutIP :: String -> [SockAddr]
-cycleoutIP ('\\' :'E':'O':'T':'\0':'\0':'\0':[]) = []
-cycleoutIP ('\\' : i0:i1:i2:i3 : p0:p1 : xs) = SockAddrInet port ip : cycleoutIP xs
-	where	ip	= fromIntegral $ (ord i3 .<<. 24) .|. (ord i2 .<<. 16) .|. (ord i1 .<<. 8) .|. ord i0
-		port	= fromIntegral $ (ord p0 .<<. 8) .|. ord p1
-		(.<<.)	= shiftL
-cycleoutIP _ = []
-	
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
 quoted :: Parser ByteString
@@ -178,3 +189,8 @@ parseMaybe :: Parser a -> ByteString -> Maybe a
 parseMaybe f xs = case parseOnly f xs of
 	Right a	-> Just a
 	Left _	-> Nothing
+{-
+manyTillWith :: Alternative f => f g -> f a -> f b -> f [a]
+manyTillWith f p end = g
+    where g = (f *> end *> pure []) <|> liftA2 (:) (f *> p) g
+-}
