@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 import Network.Socket
 import Tremulous.Protocol
 import Tremulous.Polling
