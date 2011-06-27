@@ -5,20 +5,19 @@ Maintainer:		cadynum@gmail.com
 License:		GPL
 License-File:		LICENSE
 Category:		Network
-Synopsis:		Tremulous polling utils and libraries
-Description:		Placeholder....
+Synopsis:		A library for polling tremulous servers
+Description:		A library for polling tremulous servers
 
-Cabal-Version:		>= 1.2
+Cabal-Version:		>= 1.10
 Build-Type:		Simple
 Data-Files:
 Tested-With:            GHC==7.0.2
 
-
 Library
-  Extensions:           BangPatterns ViewPatterns NamedFieldPuns TupleSections
-                        StandaloneDeriving RecordWildCards
-                        GeneralizedNewtypeDeriving FlexibleInstances FlexibleContexts
-                        TypeSynonymInstances ScopedTypeVariables DoAndIfThenElse OverloadedStrings
+  Default-Language:     Haskell2010
+  Default-Extensions:   BangPatterns TupleSections NamedFieldPuns  RecordWildCards
+                        ScopedTypeVariables OverloadedStrings
+  Other-Extensions:     StandaloneDeriving CPP
   Exposed-Modules:
                         Tremulous.Protocol
                         Tremulous.Polling
@@ -27,9 +26,9 @@ Library
                         Tremulous.SocketExtensions
                         Tremulous.ByteStringUtils
 
-  Build-Depends:        base>=4.3, array, old-time, network, mtl, deepseq, containers, strict-concurrency,
+  Build-Depends:        base>=4.3, array, old-time, network, deepseq, containers, strict-concurrency,
                         bytestring, attoparsec
-  Ghc-Prof-Options:	-prof -auto-all -caf-all
-  Ghc-Options:          -threaded
+  Ghc-Options:          -Wall -threaded -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
+  
 
 

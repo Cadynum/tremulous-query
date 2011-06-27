@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, StandaloneDeriving #-}
 module Tremulous.SocketExtensions where
 import Control.DeepSeq
 import Network.Socket

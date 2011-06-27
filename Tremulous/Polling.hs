@@ -137,27 +137,13 @@ findOrigin host ((k, v):xs)
 	| otherwise		= findOrigin host xs
 -}
 
-whileTrue :: (Monad m) => m Bool -> m ()
-whileTrue f = f >>= \c -> if c then whileTrue f else return ()
-
-whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
-whileJust x f  = f x >>= \c -> case c of
-	Just a	-> whileJust a f
-	Nothing	-> return ()
-
-whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
-whenJust x f = case x of
-	Just a	-> f a
-	Nothing	-> return ()
-
-
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
 parsePacket :: [SockAddr] -> (ByteString, SockAddr) -> Packet
 parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" content of
-	Just (parseServer -> Just x) -> Tremulous host x
-	Just (parseMaster -> Just x) | host `elem` masters -> Master host x
-	_ -> Invalid
+	Just a	| Just x <- parseServer a			-> Tremulous host x
+		| Just x <- parseMaster a, host `elem` masters	-> Master host x
+	_							-> Invalid
 	where
 	parseMaster x = S.fromList . parseMasterServer <$> stripPrefix "getserversResponse" x
 	parseServer x = parseGameServer host =<< stripPrefix "statusResponse" x
@@ -183,3 +169,16 @@ pollOne Delay{..} sockaddr = do
 
 getMicroTime :: IO Integer
 getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
+
+whileTrue :: (Monad m) => m Bool -> m ()
+whileTrue f = f >>= \c -> if c then whileTrue f else return ()
+
+whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
+whileJust x f  = f x >>= \c -> case c of
+	Just a	-> whileJust a f
+	Nothing	-> return ()
+
+whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
+whenJust x f = case x of
+	Just a	-> f a
+	Nothing	-> return ()
