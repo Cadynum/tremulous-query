@@ -4,9 +4,7 @@ module Tremulous.Polling (
 ) where
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
-
 import System.Timeout
-import System.IO.Unsafe
 
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.Chan.Strict
@@ -38,96 +36,93 @@ getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `app
 pollMasters :: Delay -> [MasterServer] -> IO [GameServer]
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
-	chan		<- newChan --Packets will be streamed here
-	--mstate		<- newMVar S.empty --Current masterlist
-	-- (master address, server addresses given by said master)
-	mstate		<- newMVar $ ((M.fromList $ map (\x -> (masterHost x, S.empty)) masterservers) :: (Map SockAddr (Set SockAddr)))
+	bindSocket sock (SockAddrInet 0 0)
+	
+	-- server addresses recieved by master
+	mstate		<- newMVar S.empty
 	-- Servers that has responded
 	tstate		<- newMVar S.empty
-	-- When first packet was sent to server
-	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
-	recvThread	<- forkIO . forever $ (writeChan chan . Just) =<< recvFrom sock mtu
-	-- The incoming data will be sent here
-	servers		<- newChan
-
-	outchan		<- newChan :: IO (Chan (ByteString, SockAddr))
 	
+	-- When first packet was sent to server (removed on proper response)
+	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
+
+	
+	-- The incoming data will be sent here
+	-- servers		<- newChan
+	outchan		<- newChan :: IO (Chan (ByteString, SockAddr))
+	-- Buffer used for gameserver requests
 	outbuffer <- forkIO $ forever $ do
 		(packet, to)	<- readChan outchan
-		-- set timestamp of sent packet
-		now		<- getMicroTime
-		x		<- takeMVar pingstate
-		putMVar pingstate $ M.insertWith' (\_ b -> b) to now x
-		sendTo sock packet to
-		threadDelay outBufferDelay
-		
+		t		<- readMVar tstate
+
+		-- only proceed if there is no response yet.
+		when (not $ S.member to t) $ do
+			-- set timestamp of sent packet
+			now		<- getMicroTime
+			x		<- takeMVar pingstate
+			putMVar pingstate $ M.insertWith' (\_ b -> b) to now x
+			sendTo sock packet to
+			threadDelay outBufferDelay
+
+
 	let bufferedSendTo a b = writeChan outchan (a, b)
+	let directSendTo = sendTo sock
 
 	-- Since the masterserver's response offers no indication if the result is complete,
 	-- we play safe by sending a couple of requests
 	forkIO . replicateM_ 3 $ do
-		mapM_ (\(MasterServer protocol masterHost) -> bufferedSendTo (getServers protocol) masterHost) masterservers
+		mapM_ (\(MasterServer protocol masterHost) -> directSendTo (getServers protocol) masterHost) masterservers
 		threadDelay (100*1000)
 
 	forkIO . whileJust resendTimes $ \n -> do
 		threadDelay resendWait
 		if n == 0 then do
-			killThread recvThread
 			killThread outbuffer
-			writeChan chan Nothing
+			sClose sock
 			return Nothing
 		else do
-			m <- S.unions . M.elems <$> readMVar mstate
+			m <- readMVar mstate
 			t <- readMVar tstate
-			let deltas = S.toList $  t `S.difference` m
-			mapM_ (bufferedSendTo getStatus) deltas
+			let delta = t `S.difference` m
+			mapM_ (bufferedSendTo getStatus) delta
 			return (Just (n-1))
 
-
-	forkIO . whileTrue $ do
-		packet <- readChan chan
+	let buildResponse = do
+		packet <- catch (Just <$> recvFrom sock mtu) (\(_ :: IOError) -> return Nothing)
 		case parsePacket (masterHost <$> masterservers) <$> packet of
-			--Time to stop parsing
-			Nothing -> do
-				writeChan servers Nothing
-				sClose sock
-				return False
 			-- The master responded, great! Now lets send requests to the new servers
-			Just (Master host x) -> do
-				mvar <- takeMVar mstate
-				let m = M.findWithDefault S.empty host mvar
+			Just (Master _ x) -> do
+				m <- takeMVar mstate
 				let m' = S.union m x
-				putMVar mstate $ M.insertWith S.union host m' mvar
+				putMVar mstate  m'
 				let delta = S.difference x m
-				when (S.size m' > S.size m) $ do
+				when (S.size m' > S.size m) $
 					mapM_ (bufferedSendTo getStatus) delta
 
-				return True
+				buildResponse
 
 			Just (Tremulous host x) -> do
 				now <- getMicroTime
 				t <- takeMVar tstate
-				if S.member host t then
+				if S.member host t then do
 					putMVar tstate t
-				else do
+					buildResponse
+				else do	
+					ps	<- takeMVar pingstate
+					start	<- return $! M.lookup host ps
+					putMVar pingstate $ M.delete host ps
 					putMVar tstate $ S.insert host t
 					-- This also servers as protection against
 					-- receiving responses for requests never sent
-					start <- M.lookup host <$> readMVar pingstate
-					whenJust start $ \a -> do
-						let gameping = fromInteger (now - a) `div` 1000
-						writeChan servers (Just x {gameping})					
-				return True
-
-			Just Invalid -> return True
-	lazyList servers
-
-	where
-	lazyList c = unsafeInterleaveIO $ do
-		x <- readChan c
-		case x of
-			Just a	-> liftM (a:) (lazyList c)
-			Nothing	-> return []
+					case start of
+						Nothing -> buildResponse
+						Just a	-> do
+							let gameping = fromInteger (now - a) `div` 1000
+							( x{ gameping } : ) `liftM` buildResponse			
+			Just Invalid -> buildResponse
+			--Time to stop parsing
+			Nothing -> return []
+	buildResponse
 
 {-
 findOrigin :: SockAddr -> [(SockAddr, Set SockAddr)] -> Maybe SockAddr
