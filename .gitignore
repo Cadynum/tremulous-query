@@ -1,0 +1,7 @@
+dist
+*.o
+*.hi
+*.chi
+*.chs.h
+*.aux
+*.ps

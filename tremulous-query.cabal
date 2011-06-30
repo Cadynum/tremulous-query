@@ -2,7 +2,7 @@ Name:			tremulous-query
 Version:		2
 Author:			Christoffer Öjeling
 Maintainer:		cadynum@gmail.com
-License:		GPL
+License:		OtherLicense
 License-File:		LICENSE
 Category:		Network
 Synopsis:		A library for polling tremulous servers
@@ -16,8 +16,8 @@ Tested-With:            GHC==7.0.2
 Library
   Default-Language:     Haskell2010
   Default-Extensions:   BangPatterns TupleSections NamedFieldPuns RecordWildCards
-                        ScopedTypeVariables OverloadedStrings
-  Other-Extensions:     StandaloneDeriving CPP
+                        ScopedTypeVariables OverloadedStrings DeriveDataTypeable
+  Other-Extensions:     CPP StandaloneDeriving
   Exposed-Modules:
                         Tremulous.Protocol
                         Tremulous.Polling
@@ -25,6 +25,7 @@ Library
                         Tremulous.NameInsensitive
                         Tremulous.SocketExtensions
                         Tremulous.ByteStringUtils
+  Other-Modules:        Tremulous.Scheduler
 
   Build-Depends:        base>=4.3, array, old-time, network, deepseq, containers, strict-concurrency,
                         bytestring, attoparsec

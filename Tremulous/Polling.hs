@@ -6,8 +6,7 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import System.Timeout
 
-import Control.Concurrent (forkIO, killThread, threadDelay)
-import Control.Concurrent.Chan.Strict
+import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar.Strict
 import Data.Foldable
 import Control.Monad hiding (mapM_, sequence_)
@@ -20,10 +19,15 @@ import Control.Applicative
 import Control.Exception
 import Data.String
 import Data.ByteString.Char8 (ByteString, append, pack)
-import System.Time
 
 import Tremulous.Protocol
 import Tremulous.ByteStringUtils as B
+import Tremulous.Scheduler
+
+data QType = QMaster !Int !Int | QGame !Int deriving Show
+
+
+data Queue = Queue !SockAddr !Integer !Int !QType deriving Show
 
 mtu :: Int
 mtu = 1500
@@ -46,59 +50,42 @@ pollMasters Delay{..} masterservers = do
 	-- When first packet was sent to server (removed on proper response)
 	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
 
-	
-	-- The incoming data will be sent here
-	-- servers		<- newChan
-	outchan		<- newChan :: IO (Chan (ByteString, SockAddr))
-	-- Buffer used for gameserver requests
-	outbuffer <- forkIO $ forever $ do
-		(packet, to)	<- readChan outchan
-		t		<- readMVar tstate
+	let sf sched host qtype = case qtype of
+		QGame n		-> do
+			now <- getMicroTime
+			pureModifyMVar pingstate $ M.insertWith' (\_ b -> b) host now
+			sendTo sock (getStatus) host
+			when (n > 0) $
+				addScheduled sched (now + fromIntegral resendWait, host, QGame (n-1))
+			
+		QMaster n proto	-> do
+			sendTo sock (getServers proto) host
+			when (n > 0) $ do
+				now <- getMicroTime
+				addScheduled sched (now + (fromIntegral resendWait) `div` 2 , host, QMaster (n-1) proto)
+		
 
-		-- only proceed if there is no response yet.
-		when (not $ S.member to t) $ do
-			-- set timestamp of sent packet
-			now		<- getMicroTime
-			x		<- takeMVar pingstate
-			putMVar pingstate $ M.insertWith' (\_ b -> b) to now x
-			sendTo sock packet to
-			threadDelay outBufferDelay
+	sched		<- newScheduler outBufferDelay sf
+		
+	addScheduledInstant sched $
+		map (\(MasterServer proto host) -> (host, QMaster (resendTimes*4) proto)) masterservers
 
-
-	let bufferedSendTo a b = writeChan outchan (a, b)
-	let directSendTo = sendTo sock
-
-	-- Since the masterserver's response offers no indication if the result is complete,
-	-- we play safe by sending a couple of requests
-	forkIO . replicateM_ 3 $ do
-		mapM_ (\(MasterServer protocol masterHost) -> directSendTo (getServers protocol) masterHost) masterservers
-		threadDelay (100*1000)
-
-	forkIO . whileJust resendTimes $ \n -> do
-		threadDelay resendWait
-		if n == 0 then do
-			killThread outbuffer
-			sClose sock
-			return Nothing
-		else do
-			m <- readMVar mstate
-			t <- readMVar tstate
-			let delta = t `S.difference` m
-			mapM_ (bufferedSendTo getStatus) delta
-			return (Just (n-1))
+	forkIO $ do
+		waitForSchedulerFinish sched
+		sClose sock
 
 	let buildResponse = do
-		packet <- catch (Just <$> recvFrom sock mtu) (\(_ :: IOError) -> return Nothing)
+		packet <- ioMaybe $ recvFrom sock mtu
 		case parsePacket (masterHost <$> masterservers) <$> packet of
 			-- The master responded, great! Now lets send requests to the new servers
-			Just (Master _ x) -> do
+			Just (Master host x) -> do
 				m <- takeMVar mstate
 				let m' = S.union m x
 				putMVar mstate  m'
 				let delta = S.difference x m
-				when (S.size m' > S.size m) $
-					mapM_ (bufferedSendTo getStatus) delta
-
+				when (S.size m' > S.size m) $ do
+					addScheduledInstant sched $ map (,QGame resendTimes) (S.toList delta)
+				deleteScheduled sched host
 				buildResponse
 
 			Just (Tremulous host x) -> do
@@ -107,7 +94,8 @@ pollMasters Delay{..} masterservers = do
 				if S.member host t then do
 					putMVar tstate t
 					buildResponse
-				else do	
+				else do
+					deleteScheduled sched host
 					ps	<- takeMVar pingstate
 					start	<- return $! M.lookup host ps
 					putMVar pingstate $ M.delete host ps
@@ -124,13 +112,9 @@ pollMasters Delay{..} masterservers = do
 			Nothing -> return []
 	buildResponse
 
-{-
-findOrigin :: SockAddr -> [(SockAddr, Set SockAddr)] -> Maybe SockAddr
-findOrigin _ [] 		= Nothing
-findOrigin host ((k, v):xs)
-	| S.member host v	= Just k
-	| otherwise		= findOrigin host xs
--}
+	where
+	ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
+
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
@@ -162,9 +146,7 @@ pollOne Delay{..} sockaddr = do
 	err sock (_::IOError) = sClose sock >> return Nothing
 	isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
 
-getMicroTime :: IO Integer
-getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
-
+{-
 whileTrue :: (Monad m) => m Bool -> m ()
 whileTrue f = f >>= \c -> if c then whileTrue f else return ()
 
@@ -177,3 +159,4 @@ whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
 whenJust x f = case x of
 	Just a	-> f a
 	Nothing	-> return ()
+-}
