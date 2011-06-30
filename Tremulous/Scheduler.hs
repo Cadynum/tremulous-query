@@ -30,7 +30,7 @@ pureModifyMVar m f = do
 	x <- takeMVar m
 	putMVar m (f x)
 
-newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO c) -> Maybe (IO ()) -> IO (Scheduler a b)
+newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
 newScheduler throughput func finalizer = do
 	queue		<- newMVar empty
 	pid		<- mask $ \a -> forkIO $ runner queue a
@@ -48,17 +48,16 @@ newScheduler throughput func finalizer = do
 						loop
 				Just a -> a
 
-			(time, idn, storage) :< q' -> do
+			(time, idn, storage) :< _ -> do
 				now <- getMicroTime
 				let wait = max throughput (fromInteger (time - now))
-				waited <- liftM (wait <= 0 || ) (falseOnException $ restore (threadDelay wait))
+				waited <- if wait <= 0 then return True else (falseOnException $ restore (threadDelay wait))
 				when waited $ do
-					swapMVar queue q'
+					pureModifyMVar queue $ deleteID idn
 					func sched idn storage
-					return ()
 				loop
 
-addScheduled :: (Ord id, Eq id) => Scheduler id a -> Event id a -> IO ()
+addScheduled :: (Ord id, Eq id, Show id) => Scheduler id a -> Event id a -> IO ()
 addScheduled Scheduler{..} event = do
 	pureModifyMVar queue $ insertTimed event
 	whenJust pid $ \a -> throwTo a Interrupt

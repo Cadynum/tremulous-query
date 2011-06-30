@@ -81,13 +81,14 @@ pollMasters Delay{..} masterservers = do
 		case parsePacket (masterHost <$> masterservers) <$> packet of
 			-- The master responded, great! Now lets send requests to the new servers
 			Just (Master host x) -> do
+				deleteScheduled sched host
 				m <- takeMVar mstate
 				let m' = S.union m x
 				putMVar mstate  m'
 				let delta = S.difference x m
-				when (S.size m' > S.size m) $ do
+				when (S.size delta > 0) $ do
 					addScheduledInstant sched $ map (,QGame resendTimes) (S.toList delta)
-				deleteScheduled sched host
+				
 				buildResponse
 
 			Just (Tremulous host x) -> do

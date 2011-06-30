@@ -18,8 +18,10 @@ main = withSocketsDo $ do
 	host2	<- getDNS "master.tremulous.net" "30700"
 	polled	<- pollMasters delay	[ MasterServer 69 host
 					, MasterServer 70 host2 ]
+
+	print $ length polled
 	--print $ map fmt polledd
-	mapM_ (\Player{..} -> putStrLn $
-		unpackorig name ++ "\t\t" ++  unpack (cleanedCase name) )  (playerList polled)
+	--mapM_ (\Player{..} -> putStrLn $
+	--	unpackorig name ++ "\t\t" ++  unpack (cleanedCase name) )  (playerList polled)
 
 
