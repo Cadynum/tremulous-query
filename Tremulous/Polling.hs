@@ -24,7 +24,7 @@ import Tremulous.Protocol
 import Tremulous.ByteStringUtils as B
 import Tremulous.Scheduler
 
-data QType = QMaster !Int !Int | QGame !Int deriving Show
+data QType = QMaster !Int !Int | QGame !Int | QJustWait deriving Show
 
 
 data Queue = Queue !SockAddr !Integer !Int !QType deriving Show
@@ -55,14 +55,21 @@ pollMasters Delay{..} masterservers = do
 			now <- getMicroTime
 			pureModifyMVar pingstate $ M.insertWith' (\_ b -> b) host now
 			sendTo sock (getStatus) host
-			when (n > 0) $
+			if (n > 0) then
 				addScheduled sched (now + fromIntegral resendWait, host, QGame (n-1))
+			else
+				addScheduled sched (now + fromIntegral resendWait, host, QJustWait)
 			
 		QMaster n proto	-> do
+			now <- getMicroTime
 			sendTo sock (getServers proto) host
-			when (n > 0) $ do
-				now <- getMicroTime
+			if (n > 0) then
 				addScheduled sched (now + (fromIntegral resendWait) `div` 2 , host, QMaster (n-1) proto)
+			else
+				addScheduled sched (now + fromIntegral resendWait, host, QJustWait)
+				
+
+		QJustWait -> return ()
 		
 
 	sched		<- newScheduler outBufferDelay sf
