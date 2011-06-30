@@ -152,18 +152,3 @@ pollOne Delay{..} sockaddr = do
 			(parseGameServer sockaddr =<< isProper =<< poll)
 	err sock (_::IOError) = sClose sock >> return Nothing
 	isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
-
-{-
-whileTrue :: (Monad m) => m Bool -> m ()
-whileTrue f = f >>= \c -> if c then whileTrue f else return ()
-
-whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
-whileJust x f  = f x >>= \c -> case c of
-	Just a	-> whileJust a f
-	Nothing	-> return ()
-
-whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
-whenJust x f = case x of
-	Just a	-> f a
-	Nothing	-> return ()
--}

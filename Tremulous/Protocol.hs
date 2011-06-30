@@ -189,8 +189,3 @@ parseMaybe :: Parser a -> ByteString -> Maybe a
 parseMaybe f xs = case parseOnly f xs of
 	Right a	-> Just a
 	Left _	-> Nothing
-{-
-manyTillWith :: Alternative f => f g -> f a -> f b -> f [a]
-manyTillWith f p end = g
-    where g = (f *> end *> pure []) <|> liftA2 (:) (f *> p) g
--}
