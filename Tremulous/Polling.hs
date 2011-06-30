@@ -6,7 +6,6 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import System.Timeout
 
-import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar.Strict
 import Data.Foldable
 import Control.Monad hiding (mapM_, sequence_)
@@ -72,14 +71,10 @@ pollMasters Delay{..} masterservers = do
 		QJustWait -> return ()
 		
 
-	sched		<- newScheduler outBufferDelay sf
+	sched		<- newScheduler outBufferDelay sf (Just (sClose sock))
 		
 	addScheduledInstant sched $
 		map (\(MasterServer proto host) -> (host, QMaster (resendTimes*4) proto)) masterservers
-
-	forkIO $ do
-		waitForSchedulerFinish sched
-		sClose sock
 
 	let buildResponse = do
 		packet <- ioMaybe $ recvFrom sock mtu

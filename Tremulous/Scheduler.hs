@@ -17,7 +17,6 @@ instance Exception Interrupt
 data (Eq id, Ord id) => Scheduler id a = Scheduler
 	{ pid		:: !(Maybe ThreadId)
 	, queue		:: !(MVar (Seq (Integer, id, a)))
-	, finished	:: !(MVar ())
 	}
 
 type Event id a = (Integer, id, a)
@@ -31,21 +30,23 @@ pureModifyMVar m f = do
 	x <- takeMVar m
 	putMVar m (f x)
 
-newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO c) -> IO (Scheduler a b)
-newScheduler throughput func = do
+newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO c) -> Maybe (IO ()) -> IO (Scheduler a b)
+newScheduler throughput func finalizer = do
 	queue		<- newMVar empty
-	finished	<- newEmptyMVar
-	pid		<- mask $ \a -> forkIO $ runner queue finished a
+	pid		<- mask $ \a -> forkIO $ runner queue a
 	
 	return Scheduler{pid=Just pid, ..}
 	where
-	runner queue finished restore = loop
+	runner queue restore = loop
 		where
 		sched = Scheduler{pid=Nothing, ..}
 		loop = do
 		q <- readMVar queue
 		case viewl q of
-			EmptyL -> putMVar finished ()
+			EmptyL -> case finalizer of
+				Nothing -> do	ignoreException $ restore $ threadBlock
+						loop
+				Just a -> a
 
 			(time, idn, storage) :< q' -> do
 				now <- getMicroTime
@@ -78,9 +79,6 @@ deleteScheduled Scheduler{..} ident = do
 	pureModifyMVar queue $ deleteID ident
 	whenJust pid $ \a -> throwTo a Interrupt
 
-waitForSchedulerFinish :: (Ord id, Eq id) => Scheduler id a -> IO ()
-waitForSchedulerFinish Scheduler{..} = takeMVar finished
-				
 getMicroTime :: IO Integer
 getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
 
