@@ -1,13 +1,13 @@
-module Tremulous.Scheduler where
+module Network.Tremulous.Scheduler where
 import Prelude hiding (drop)
-import System.Time
+import Control.Monad
 import Control.Applicative hiding (empty)
 import Control.Concurrent
 import Control.Exception
 import Data.Typeable
 import Data.Sequence
 import Data.Foldable
-import Control.Monad
+import System.Time
 
 data Interrupt = Interrupt
 	deriving (Typeable, Show)
@@ -86,6 +86,7 @@ ignoreException f = handle (\Interrupt -> return ()) f
 
 falseOnException :: IO a -> IO Bool
 falseOnException f = handle (\Interrupt -> return False) (f >> return True)
+
 
 insertTimed :: (Ord id, Eq id) => (Event id a) -> Seq (Event id a) -> Seq (Event id a)
 insertTimed x@(a,_,_) q = (s1 |> x) >< s2 where

@@ -1,32 +1,32 @@
-module Tremulous.Polling (
+module Network.Tremulous.Polling (
 	pollMasters
 	, pollOne
 ) where
-import Network.Socket hiding (send, sendTo, recv, recvFrom)
-import Network.Socket.ByteString
-import System.Timeout
-
-import Control.Concurrent.MVar.Strict
-import Data.Foldable
-import Control.Monad hiding (mapM_, sequence_)
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
+
+import Control.Monad hiding (mapM_, sequence_)
+import Control.Concurrent (forkIO, threadDelay, killThread)
+import Control.Concurrent.MVar.Strict
+import Control.Applicative
+import Control.Exception
+
+import Data.Foldable
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Map (Map)
 import qualified Data.Map as M
-import Control.Applicative
-import Control.Exception
 import Data.String
 import Data.ByteString.Char8 (ByteString, append, pack)
 
-import Tremulous.Protocol
-import Tremulous.ByteStringUtils as B
-import Tremulous.Scheduler
+import Network.Socket hiding (send, sendTo, recv, recvFrom)
+import Network.Socket.ByteString
+import Network.Tremulous.Protocol
+import Network.Tremulous.ByteStringUtils as B
+import Network.Tremulous.Scheduler
 
-data QType = QMaster !Int !Int | QGame !Int | QJustWait deriving Show
+data QType = QMaster !Int !Int | QGame !Int | QJustWait
 
-
-data Queue = Queue !SockAddr !Integer !Int !QType deriving Show
+data Queue = Queue !SockAddr !Integer !Int !QType
 
 mtu :: Int
 mtu = 1500
@@ -36,7 +36,7 @@ getStatus = "\xFF\xFF\xFF\xFFgetstatus"
 getServers :: Int -> ByteString
 getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
 
-pollMasters :: Delay -> [MasterServer] -> IO [GameServer]
+pollMasters :: Delay -> [MasterServer] -> IO ([GameServer], Int, Int, Set SockAddr)
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	bindSocket sock (SockAddrInet 0 0)
@@ -84,7 +84,7 @@ pollMasters Delay{..} masterservers = do
 				deleteScheduled sched host
 				m <- takeMVar mstate
 				let m' = S.union m x
-				putMVar mstate  m'
+				putMVar mstate m'
 				let delta = S.difference x m
 				when (S.size delta > 0) $ do
 					addScheduledInstant sched $ map (,QGame resendTimes) (S.toList delta)
@@ -111,13 +111,14 @@ pollMasters Delay{..} masterservers = do
 							let gameping = fromInteger (now - a) `div` 1000
 							( x{ gameping } : ) `liftM` buildResponse			
 			Just Invalid -> buildResponse
-			--Time to stop parsing
+			
 			Nothing -> return []
-	buildResponse
-
-	where
-	ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
-
+			
+	xs	<- buildResponse
+	m	<- takeMVar mstate
+	t	<- takeMVar tstate
+	return $! (xs, S.size t, S.size m, t)
+	
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
@@ -139,12 +140,29 @@ pollOne Delay{..} sockaddr = do
 	where
 	f sock = do
 		connect sock sockaddr
-		send sock getStatus
+		pid <- forkIO $ whileJust resendTimes $ \n -> do
+			send sock getStatus
+			threadDelay resendWait
+			if n > 0 then
+				return $ Just (n-1)
+			else do
+				sClose sock
+				return Nothing
+			
 		start	<- getMicroTime
-		poll	<- timeout resendWait $ recv sock mtu
+		poll	<- ioMaybe $ recv sock mtu
+		killThread pid
 		stop	<- getMicroTime
 		let gameping = fromInteger (stop - start) `div` 1000
 		return $ (\x -> x {gameping}) <$> 
 			(parseGameServer sockaddr =<< isProper =<< poll)
 	err sock (_::IOError) = sClose sock >> return Nothing
 	isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
+
+ioMaybe :: IO a -> IO (Maybe a)
+ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
+
+whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
+whileJust x f  = f x >>= \c -> case c of
+	Just a	-> whileJust a f
+	Nothing	-> return ()

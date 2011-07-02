@@ -1,5 +1,5 @@
 Name:			tremulous-query
-Version:		2
+Version:		1.0
 Author:			Christoffer Öjeling
 Maintainer:		cadynum@gmail.com
 License:		OtherLicense
@@ -19,17 +19,17 @@ Library
                         ScopedTypeVariables OverloadedStrings DeriveDataTypeable
   Other-Extensions:     CPP StandaloneDeriving
   Exposed-Modules:
-                        Tremulous.Protocol
-                        Tremulous.Polling
-                        Tremulous.Util
-                        Tremulous.NameInsensitive
-                        Tremulous.SocketExtensions
-                        Tremulous.ByteStringUtils
-  Other-Modules:        Tremulous.Scheduler
+                        Network.Tremulous.Protocol
+                        Network.Tremulous.Polling
+                        Network.Tremulous.Util
+                        Network.Tremulous.NameInsensitive
+                        Network.Tremulous.SocketExtensions
+                        Network.Tremulous.ByteStringUtils
+                        Network.Tremulous.Scheduler
 
-  Build-Depends:        base>=4.3, array, old-time, network, deepseq, containers, strict-concurrency,
+  Build-Depends:        base>=4.3, old-time, network, deepseq, containers, strict-concurrency,
                         bytestring, attoparsec
   Ghc-Options:          -Wall -threaded -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
-  
+
 
 

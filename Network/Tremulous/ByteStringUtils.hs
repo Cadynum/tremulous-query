@@ -1,9 +1,9 @@
-module Tremulous.ByteStringUtils where
-import Data.ByteString.Char8 as B
-import Control.Applicative
-import Data.Char as C
+module Network.Tremulous.ByteStringUtils where
 import Prelude as P
+import Control.Applicative
 import Control.DeepSeq
+import Data.ByteString.Char8 as B
+import Data.Char
 
 instance NFData ByteString 
 
@@ -19,7 +19,7 @@ splitlines :: ByteString -> [ByteString]
 splitlines = splitfilter '\n'
 
 stripw :: ByteString -> ByteString
-stripw = B.dropWhile C.isSpace
+stripw = B.dropWhile isSpace
 
 splitfilter :: Char -> ByteString -> [ByteString]
 splitfilter f = P.filter (not . B.null) . split f

@@ -1,9 +1,9 @@
-module Tremulous.NameInsensitive (
+module Network.Tremulous.NameInsensitive (
 	TI(..), mk, mkColor, mkAlphaNum, mkColorAlpha, unpackorig
 ) where
+import Control.DeepSeq
 import Data.ByteString.Char8 as B
 import Data.Char
-import Control.DeepSeq
 import Data.Ord
 
 data TI = TI { 

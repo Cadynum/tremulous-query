@@ -1,26 +1,26 @@
-module Tremulous.Protocol (
-	  module Tremulous.NameInsensitive
+module Network.Tremulous.Protocol (
+	  module Network.Tremulous.NameInsensitive
 	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..)
 	, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
 import Prelude as P hiding (foldl)
-import Network.Socket
 import Control.Applicative
 import Control.DeepSeq
+
 import Data.Attoparsec.Char8 as A
 import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
-
 import Data.Maybe
 import Data.String
 import Data.Char as C
 import Data.Bits
 import Data.Word
 
-import Tremulous.ByteStringUtils as B
-import Tremulous.SocketExtensions ()
-import Tremulous.NameInsensitive
+import Network.Socket
+import Network.Tremulous.ByteStringUtils as B
+import Network.Tremulous.SocketExtensions ()
+import Network.Tremulous.NameInsensitive
 
 data Delay = Delay {
 	  resendWait
@@ -179,11 +179,7 @@ parseMasterServer = fromMaybe [] . parseMaybe attoIP
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
 quoted :: Parser ByteString
-quoted = do
-	char '"'
-	x <- takeTill (=='"')
-	char '"'
-	return x
+quoted = char '"' *> takeTill (=='"') <* char '"'
 
 parseMaybe :: Parser a -> ByteString -> Maybe a
 parseMaybe f xs = case parseOnly f xs of

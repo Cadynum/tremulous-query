@@ -1,4 +1,4 @@
-module Tremulous.Util (
+module Network.Tremulous.Util (
 	serverByAddress
 	, search
 	, makePlayerList
@@ -6,18 +6,15 @@ module Tremulous.Util (
 	, playerList
 	, stats
 	, partitionTeams
-	, ircifyColors
 	, removeColors
-	, webifyColors
 ) where
-import Data.Array hiding ((//))
 import Data.List hiding (foldl')
 import Data.Foldable (foldl')
 import Data.Char
 import qualified Data.ByteString.Char8 as B
 
 import Network.Socket
-import Tremulous.Protocol as T
+import Network.Tremulous.Protocol as T
 
 
 serverByAddress :: SockAddr -> [GameServer] -> Maybe GameServer
@@ -52,20 +49,8 @@ partitionTeams = foldr f ([], [], [], []) where
 playerList :: [GameServer] -> [Player]
 playerList = foldr ((++) . T.players) []
 
-removeColors, ircifyColors, webifyColors :: String -> String
+removeColors :: String -> String
 
 removeColors ('^' : x : xs) | isAlphaNum x	= removeColors xs
 removeColors (x : xs)				= x : removeColors xs
 removeColors [] 				= []
-
-ircifyColors = foldr f "\SI" where
-	f '^' (x:xs) | x >= '0' && x <= '9'	= mc!x ++ xs
-	f x xs					= x : xs
-	mc = listArray ('0', '9') ["\SI", "\ETX04", "\ETX09", "\ETX08", "\ETX12", "\ETX11", "\ETX13", "\SI", "\SI", "\ETX04"]
-
-webifyColors = f False where
-	f n ('^':x:xs) | x >= '0' && x <= '9'
-			= close n ++ "<span class=\"t" ++ x : "\">" ++ f True xs
-	f n (x:xs)	= x:f n xs
-	f n []		= close n
-	close n = if n then "</span>" else ""
