@@ -26,8 +26,6 @@ import Network.Tremulous.Scheduler
 
 data QType = QMaster !Int !Int | QGame !Int | QJustWait
 
-data Queue = Queue !SockAddr !Integer !Int !QType
-
 mtu :: Int
 mtu = 1500
 
