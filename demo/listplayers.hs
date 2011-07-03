@@ -5,7 +5,7 @@ import Network.Tremulous.Polling
 import Network.Tremulous.Util
 import Control.Monad
 
-delay = Delay (400*1000) 3 (0)
+delay = Delay (400*1000) 3 (3)
 
 getDNS :: String -> String -> IO SockAddr
 getDNS host port =  do

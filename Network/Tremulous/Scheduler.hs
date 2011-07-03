@@ -33,7 +33,7 @@ pureModifyMVar m f = do
 newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
 newScheduler throughput func finalizer = do
 	queue		<- newMVar empty
-	pid		<- mask $ \a -> forkIO $ runner queue a
+	pid		<- uninterruptibleMask $ \a -> forkIO $ runner queue a
 	
 	return Scheduler{pid=Just pid, ..}
 	where
@@ -52,7 +52,7 @@ newScheduler throughput func finalizer = do
 			(-1, idn, storage) :< _ -> do
 				pureModifyMVar queue $ deleteID idn
 				func sched idn storage
-				when (throughput > 0) $
+				when (throughput > 0) $ do
 					threadDelay throughput
 				loop
 	
