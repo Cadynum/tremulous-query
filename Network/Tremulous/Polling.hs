@@ -1,6 +1,5 @@
 module Network.Tremulous.Polling (
-	pollMasters
-	, pollOne
+	pollMasters, pollOne
 ) where
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
 
@@ -27,14 +26,14 @@ import Network.Tremulous.Scheduler
 data QType = QMaster !Int !Int | QGame !Int | QJustWait
 
 mtu :: Int
-mtu = 1500
+mtu = 2048
 
 getStatus :: IsString s => s
 getStatus = "\xFF\xFF\xFF\xFFgetstatus"
 getServers :: Int -> ByteString
 getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
 
-pollMasters :: Delay -> [MasterServer] -> IO ([GameServer], Int, Int, Set SockAddr)
+pollMasters :: Delay -> [MasterServer] -> IO PollMasters
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	bindSocket sock (SockAddrInet 0 0)
@@ -51,7 +50,7 @@ pollMasters Delay{..} masterservers = do
 		QGame n		-> do
 			now <- getMicroTime
 			pureModifyMVar pingstate $ M.insertWith' (\_ b -> b) host now
-			sendTo sock (getStatus) host
+			sendTo sock getStatus host
 			if (n > 0) then
 				addScheduled sched (now + fromIntegral resendWait, host, QGame (n-1))
 			else
@@ -115,7 +114,7 @@ pollMasters Delay{..} masterservers = do
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
-	return $! (xs, S.size t, S.size m, t)
+	return $! PollMasters xs (S.size t) (S.size m) t
 	
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid

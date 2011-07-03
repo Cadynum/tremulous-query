@@ -44,14 +44,14 @@ newScheduler throughput func finalizer = do
 		q <- readMVar queue
 		case viewl q of
 			EmptyL -> case finalizer of
-				Nothing -> do	ignoreException $ restore $ threadBlock
+				Nothing -> do	ignoreException $ restore threadBlock
 						loop
 				Just a -> a
 
 			(time, idn, storage) :< _ -> do
 				now <- getMicroTime
 				let wait = max throughput (fromInteger (time - now))
-				waited <- if wait <= 0 then return True else (falseOnException $ restore (threadDelay wait))
+				waited <- if wait <= 0 then return True else falseOnException $ restore (threadDelay wait)
 				when waited $ do
 					pureModifyMVar queue $ deleteID idn
 					func sched idn storage
@@ -82,7 +82,7 @@ getMicroTime :: IO Integer
 getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
 
 ignoreException :: IO () -> IO ()
-ignoreException f = handle (\Interrupt -> return ()) f
+ignoreException = handle (\Interrupt -> return ())
 
 falseOnException :: IO a -> IO Bool
 falseOnException f = handle (\Interrupt -> return False) (f >> return True)

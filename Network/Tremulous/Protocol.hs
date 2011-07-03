@@ -1,6 +1,6 @@
 module Network.Tremulous.Protocol (
 	  module Network.Tremulous.NameInsensitive
-	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..)
+	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollMasters(..)
 	, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
@@ -16,6 +16,7 @@ import Data.String
 import Data.Char as C
 import Data.Bits
 import Data.Word
+import Data.Set (Set)
 
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
@@ -74,6 +75,12 @@ instance NFData GameServer where
 instance NFData Player where
 	rnf (Player a b c d)  = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
 
+data PollMasters = PollMasters {
+	  polled		:: ![GameServer]
+	, serversResponded
+	, serversRequested	:: !Int
+	, respondedCache	:: !(Set SockAddr)
+	}
 
 -- Protocol version
 proto2string :: IsString s => Int ->  s
