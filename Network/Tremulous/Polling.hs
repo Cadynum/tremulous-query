@@ -69,10 +69,11 @@ pollMasters Delay{..} masterservers = do
 		
 
 	sched		<- newScheduler outBufferDelay sf (Just (sClose sock))
-		
 	addScheduledInstant sched $
 		map (\(MasterServer proto host) -> (host, QMaster (resendTimes*4) proto)) masterservers
 
+	startScheduler sched
+	
 	let buildResponse = do
 		packet <- ioMaybe $ recvFrom sock mtu
 		case parsePacket (masterHost <$> masterservers) <$> packet of
@@ -148,6 +149,7 @@ pollOne Delay{..} sockaddr = do
 			
 		start	<- getMicroTime
 		poll	<- ioMaybe $ recv sock mtu
+		sClose sock
 		killThread pid
 		stop	<- getMicroTime
 		let gameping = fromInteger (stop - start) `div` 1000

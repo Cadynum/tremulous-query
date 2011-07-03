@@ -15,7 +15,8 @@ data Interrupt = Interrupt
 instance Exception Interrupt
 
 data (Eq id, Ord id) => Scheduler id a = Scheduler
-	{ pid		:: !(Maybe ThreadId)
+	{ sync		:: !(MVar ())
+	, started	:: !(MVar ())
 	, queue		:: !(MVar (Seq (Integer, id, a)))
 	}
 
@@ -31,62 +32,68 @@ pureModifyMVar m f = do
 	putMVar m (f x)
 
 newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
-newScheduler throughput func finalizer = do
+newScheduler throughput func finalizer = do 
 	queue		<- newMVar empty
-	pid		<- uninterruptibleMask $ \a -> forkIO $ runner queue a
+	sync		<- newEmptyMVar
+	started		<- newEmptyMVar
+	let sched	=  Scheduler{..}
+	uninterruptibleMask $ \a -> forkIO $ runner sched a
+	return sched
 	
-	return Scheduler{pid=Just pid, ..}
 	where
-	runner queue restore = loop
-		where
-		sched = Scheduler{pid=Nothing, ..}
-		loop = do
-		q <- readMVar queue
-		case viewl q of
-			EmptyL -> case finalizer of
-				Nothing -> do	ignoreException $ restore threadBlock
+	runner sched@Scheduler{..} restore = do
+		takeMVar started
+		tid		<- myThreadId
+		syncid		<- forkIOUnmasked $ forever $ takeMVar sync >> throwTo tid Interrupt
+		let loop = do
+			q <- readMVar queue
+			case viewl q of
+				EmptyL -> case finalizer of
+					Nothing -> do
+						ignoreException $ restore threadBlock
 						loop
-				Just a -> a
+					Just a -> do
+						killThread syncid
+						a
 
-			-- Instant
-			(-1, idn, storage) :< _ -> do
-				pureModifyMVar queue $ deleteID idn
-				func sched idn storage
-				when (throughput > 0) $ do
-					threadDelay throughput
-				loop
-	
-			(time, idn, storage) :< _ -> do
-				now <- getMicroTime
-				let wait = fromInteger (time - now)
-				waited <- (wait <= 0 ||) `liftM` (falseOnException $ restore (threadDelay wait))
-				when waited $ do
-					pureModifyMVar queue $ deleteID idn
-					func sched idn storage
-					when (throughput > 0) $
-						threadDelay throughput
-				loop
+				(time, idn, storage) :< _ -> do
+					now <- getMicroTime
+					let wait = fromInteger (time - now)
+					waited <- ((wait <= 0 || wait == -1) ||) `liftM`
+						(falseOnException $ restore (threadDelay wait))
+					when waited $ do
+						pureModifyMVar queue $ deleteID idn
+						func sched idn storage
+						when (throughput > 0)
+							(threadDelay throughput)
+					loop
+		loop
+
+signal :: MVar () -> IO ()
+signal a = tryPutMVar a () >> return ()
+
+startScheduler :: (Ord id, Eq id, Show id) => Scheduler id a -> IO ()
+startScheduler Scheduler{..} = putMVar started ()
 
 addScheduled :: (Ord id, Eq id, Show id) => Scheduler id a -> Event id a -> IO ()
 addScheduled Scheduler{..} event = do
 	pureModifyMVar queue $ insertTimed event
-	whenJust pid $ \a -> throwTo a Interrupt
+	signal sync
 	
 addScheduledBatch :: (Ord id, Eq id, Foldable f) => Scheduler id a -> f (Event id a) -> IO ()
 addScheduledBatch Scheduler{..} events = do
 	pureModifyMVar queue $ \q -> foldl' (flip insertTimed) q events
-	whenJust pid $ \a -> throwTo a Interrupt
+	signal sync
 
 addScheduledInstant :: (Ord id, Eq id, Foldable f) => Scheduler id a -> f (id, a) -> IO ()
 addScheduledInstant Scheduler{..} events = do
 	pureModifyMVar queue $ \q -> foldl' (\acc (a, b) -> (-1, a, b) <| acc) q events
-	whenJust pid $ \a -> throwTo a Interrupt
-
+	signal sync
 
 deleteScheduled :: (Ord id, Eq id) => Scheduler id a -> id -> IO ()
 deleteScheduled Scheduler{..} ident = do
 	pureModifyMVar queue $ deleteID ident
-	whenJust pid $ \a -> throwTo a Interrupt
+	signal sync
 
 getMicroTime :: IO Integer
 getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
