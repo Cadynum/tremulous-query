@@ -48,13 +48,23 @@ newScheduler throughput func finalizer = do
 						loop
 				Just a -> a
 
+			-- Instant
+			(-1, idn, storage) :< _ -> do
+				pureModifyMVar queue $ deleteID idn
+				func sched idn storage
+				when (throughput > 0) $
+					threadDelay throughput
+				loop
+	
 			(time, idn, storage) :< _ -> do
 				now <- getMicroTime
-				let wait = max throughput (fromInteger (time - now))
-				waited <- if wait <= 0 then return True else falseOnException $ restore (threadDelay wait)
+				let wait = fromInteger (time - now)
+				waited <- (wait <= 0 ||) `liftM` (falseOnException $ restore (threadDelay wait))
 				when waited $ do
 					pureModifyMVar queue $ deleteID idn
 					func sched idn storage
+					when (throughput > 0) $
+						threadDelay throughput
 				loop
 
 addScheduled :: (Ord id, Eq id, Show id) => Scheduler id a -> Event id a -> IO ()
