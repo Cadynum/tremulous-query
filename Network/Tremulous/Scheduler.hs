@@ -59,7 +59,7 @@ newScheduler throughput func finalizer = do
 				(time, idn, storage) :< _ -> do
 					now <- getMicroTime
 					let wait = fromInteger (time - now)
-					waited <- ((wait <= 0 || wait == -1) ||) `liftM`
+					waited <- ((time == -1 || wait <= 0) ||) `liftM`
 						(falseOnException $ restore (threadDelay wait))
 					when waited $ do
 						pureModifyMVar queue $ deleteID idn
