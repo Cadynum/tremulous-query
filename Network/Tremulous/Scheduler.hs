@@ -1,4 +1,8 @@
-module Network.Tremulous.Scheduler where
+module Network.Tremulous.Scheduler(
+	  Event, Scheduler
+	, newScheduler, startScheduler, addScheduled, addScheduledBatch
+	, addScheduledInstant, deleteScheduled, getMicroTime
+) where
 import Prelude hiding (drop)
 import Control.Monad
 import Control.Applicative hiding (empty)
@@ -8,6 +12,7 @@ import Data.Typeable
 import Data.Sequence
 import Data.Foldable
 import System.Time
+
 
 data Interrupt = Interrupt
 	deriving (Typeable, Show)
@@ -114,8 +119,3 @@ deleteID :: (Ord id, Eq id) => id -> Seq (Event id a) -> Seq (Event id a)
 deleteID ident q = s1 >< s2' where
 	(s1, s2) = spanl (\(_,a,_) -> a /= ident) q
 	s2' = drop 1 s2 
-
-whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
-whenJust x f = case x of
-	Just a	-> f a
-	Nothing	-> return ()

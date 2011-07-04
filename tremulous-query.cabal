@@ -2,7 +2,7 @@ Name:			tremulous-query
 Version:		1.0
 Author:			Christoffer Öjeling
 Maintainer:		cadynum@gmail.com
-License:		OtherLicense
+License:		GPL-3
 License-File:		LICENSE
 Category:		Network
 Synopsis:		A library for polling tremulous servers
@@ -10,8 +10,11 @@ Description:		A library for polling tremulous servers
 
 Cabal-Version:		>= 1.10
 Build-Type:		Simple
-Data-Files:
-Tested-With:            GHC==7.0.2
+Tested-With:            GHC==7.0.3
+
+Source-Repository head
+  Type:                 git
+  Location:             git://github.com/Cadynum/tremulous-query.git
 
 Library
   Default-Language:     Haskell2010
@@ -27,9 +30,8 @@ Library
                         Network.Tremulous.ByteStringUtils
                         Network.Tremulous.Scheduler
 
-  Build-Depends:        base>=4.3, old-time, network, deepseq, containers, strict-concurrency,
-                        bytestring, attoparsec
-  Ghc-Options:          -Wall -threaded -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
+  Build-Depends:        base>=4.3, old-time, network, deepseq, containers, bytestring, attoparsec
+  Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
 
 
 

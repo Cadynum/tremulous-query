@@ -3,9 +3,10 @@ module Network.Tremulous.Polling (
 ) where
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
 
+import Control.DeepSeq
 import Control.Monad hiding (mapM_, sequence_)
 import Control.Concurrent (forkIO, threadDelay, killThread)
-import Control.Concurrent.MVar.Strict
+import Control.Concurrent.MVar
 import Control.Applicative
 import Control.Exception
 
@@ -82,7 +83,7 @@ pollMasters Delay{..} masterservers = do
 				deleteScheduled sched host
 				m <- takeMVar mstate
 				let m' = S.union m x
-				putMVar mstate m'
+				putMVar' mstate m'
 				let delta = S.difference x m
 				when (S.size delta > 0) $ do
 					addScheduledInstant sched $ map (,QGame resendTimes) (S.toList delta)
@@ -93,14 +94,14 @@ pollMasters Delay{..} masterservers = do
 				now <- getMicroTime
 				t <- takeMVar tstate
 				if S.member host t then do
-					putMVar tstate t
+					putMVar' tstate t
 					buildResponse
 				else do
 					deleteScheduled sched host
 					ps	<- takeMVar pingstate
 					start	<- return $! M.lookup host ps
-					putMVar pingstate $ M.delete host ps
-					putMVar tstate $ S.insert host t
+					putMVar' pingstate $ M.delete host ps
+					putMVar' tstate $ S.insert host t
 					-- This also servers as protection against
 					-- receiving responses for requests never sent
 					case start of
@@ -160,6 +161,14 @@ pollOne Delay{..} sockaddr = do
 
 ioMaybe :: IO a -> IO (Maybe a)
 ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
+
+putMVar' :: NFData a => MVar a -> a -> IO ()
+putMVar' m a = rnf a `seq` putMVar m a
+
+pureModifyMVar :: NFData a => MVar a -> (a -> a) -> IO ()
+pureModifyMVar m f = do
+	x <- takeMVar m
+	putMVar' m (f x)
 
 whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
 whileJust x f  = f x >>= \c -> case c of
