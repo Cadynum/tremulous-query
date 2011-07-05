@@ -21,16 +21,16 @@ Library
   Default-Extensions:   BangPatterns TupleSections NamedFieldPuns RecordWildCards
                         ScopedTypeVariables OverloadedStrings DeriveDataTypeable
   Other-Extensions:     CPP StandaloneDeriving
-  Exposed-Modules:
-                        Network.Tremulous.Protocol
+  Exposed-Modules:      Network.Tremulous.Protocol
                         Network.Tremulous.Polling
                         Network.Tremulous.Util
                         Network.Tremulous.NameInsensitive
                         Network.Tremulous.SocketExtensions
                         Network.Tremulous.ByteStringUtils
                         Network.Tremulous.Scheduler
+  Other-Modules:        Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.3, old-time, network, deepseq, containers, bytestring, attoparsec
+  Build-Depends:        base>=4.3, old-time, network, deepseq, containers, bytestring, attoparsec, mtl
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
 
 
