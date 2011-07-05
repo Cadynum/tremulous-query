@@ -4,7 +4,7 @@ module Network.Tremulous.Protocol (
 	, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
-import Prelude as P hiding (foldl)
+import Prelude as P
 import Control.Applicative
 import Control.DeepSeq
 import Control.Monad.State.Strict
@@ -14,7 +14,7 @@ import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 import Data.Maybe
 import Data.String
-import Data.Char as C
+import Data.Char
 import Data.Bits
 import Data.Word
 import Data.Set (Set)
