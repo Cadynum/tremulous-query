@@ -108,7 +108,7 @@ pollMasters Delay{..} masterservers = do
 						Nothing -> buildResponse
 						Just a	-> do
 							let gameping = fromInteger (now - a) `div` 1000
-							( x{ gameping } : ) `liftM` buildResponse			
+							( strict x{ gameping } : ) `liftM` buildResponse			
 			Just Invalid -> buildResponse
 			
 			Nothing -> return []
@@ -117,7 +117,6 @@ pollMasters Delay{..} masterservers = do
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
 	return $! PollMasters xs (S.size t) (S.size m) t
-	
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
@@ -169,8 +168,12 @@ pureModifyMVar :: NFData a => MVar a -> (a -> a) -> IO ()
 pureModifyMVar m f = do
 	x <- takeMVar m
 	putMVar' m (f x)
+	
+strict :: NFData a => a -> a
+strict x = x `deepseq` x
 
 whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
 whileJust x f  = f x >>= \c -> case c of
 	Just a	-> whileJust a f
 	Nothing	-> return ()
+
