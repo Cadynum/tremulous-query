@@ -2,8 +2,7 @@ module Network.Tremulous.Util (
 	serverByAddress
 	, search
 	, makePlayerList
-	, toPlayerList
-	, playerList
+	, makePlayerNameList
 	, stats
 	, partitionTeams
 	, removeColors
@@ -21,22 +20,23 @@ serverByAddress :: SockAddr -> [GameServer] -> Maybe GameServer
 serverByAddress add =  find (\x -> add == address x)
 
 search :: String -> [GameServer] -> [(TI, GameServer)]
-search ""	= makePlayerList 
-search rawstr	= filter (\(a,_) -> str `B.isInfixOf` cleanedCase a ) . makePlayerList 
+search ""	= makePlayerNameList 
+search rawstr	= filter (\(a,_) -> str `B.isInfixOf` cleanedCase a ) . makePlayerNameList 
 	where
 	str	= B.pack $ map toLower rawstr
 	
-makePlayerList :: [GameServer] -> [(TI, GameServer)]
-makePlayerList = concatMap $ \x -> map (\a -> (name a, x)) (players x)
+makePlayerNameList :: [GameServer] -> [(TI, GameServer)]
+makePlayerNameList = concatMap $ \x -> map (\a -> (name a, x)) (players x)
 
-toPlayerList :: [GameServer] -> [(Player, GameServer)]
-toPlayerList = concatMap $ \x -> map (\a -> (a, x)) (players x)
+makePlayerList :: [GameServer] -> [(Player, GameServer)]
+makePlayerList = concatMap $ \x -> map (\a -> (a, x)) (players x)
 
 stats :: [GameServer] -> (Int, Int, Int)
 stats polled = (tot, players, bots) where
 	tot		= length polled
 	(players, bots) = foldl' trv (0, 0) (playerList polled)
 	trv (!p, !b) x	= if ping x == 0 then (p, b+1) else (p+1, b)
+	playerList	= foldr ((++) . T.players) []
 
 partitionTeams :: [Player] -> ([Player], [Player], [Player], [Player])
 partitionTeams = foldr f ([], [], [], []) where
@@ -46,11 +46,7 @@ partitionTeams = foldr f ([], [], [], []) where
 		Humans		-> (s, a, x:h, u)
 		Unknown		-> (s, a, h, x:u)
 
-playerList :: [GameServer] -> [Player]
-playerList = foldr ((++) . T.players) []
-
 removeColors :: String -> String
-
 removeColors ('^' : x : xs) | isAlphaNum x	= removeColors xs
 removeColors (x : xs)				= x : removeColors xs
 removeColors [] 				= []

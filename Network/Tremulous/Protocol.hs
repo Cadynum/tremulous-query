@@ -122,7 +122,7 @@ parseP = foldr' f []
 		_	-> Unknown
 
 parsePlayers :: ByteString -> [ByteString] -> Maybe [Player]
-parsePlayers p xs = sequence $ P.zipWith parsePlayer (parseP p ++ repeat Unknown) xs
+parsePlayers p = zipWithM parsePlayer (parseP p ++ repeat Unknown)
 
 parseCVars :: ByteString -> [(ByteString, ByteString)]
 parseCVars xs = f (splitfilter '\\' xs) where 

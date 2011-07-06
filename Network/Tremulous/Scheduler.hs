@@ -65,7 +65,7 @@ newScheduler throughput func finalizer = do
 					now <- getMicroTime
 					let wait = fromInteger (time - now)
 					waited <- ((time == -1 || wait <= 0) ||) `liftM`
-						(falseOnException $ restore (threadDelay wait))
+						falseOnException (restore (threadDelay wait))
 					when waited $ do
 						pureModifyMVar queue $ deleteID idn
 						func sched idn storage
@@ -110,7 +110,7 @@ falseOnException :: IO a -> IO Bool
 falseOnException f = handle (\Interrupt -> return False) (f >> return True)
 
 
-insertTimed :: (Ord id, Eq id) => (Event id a) -> Seq (Event id a) -> Seq (Event id a)
+insertTimed :: (Ord id, Eq id) => Event id a -> Seq (Event id a) -> Seq (Event id a)
 insertTimed x@(a,_,_) q = (s1 |> x) >< s2 where
 	(s1, s2) = spanl (\(b,_,_) -> a >= b) q
 
