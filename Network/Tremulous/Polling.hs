@@ -34,7 +34,7 @@ getStatus = "\xFF\xFF\xFF\xFFgetstatus"
 getServers :: Int -> ByteString
 getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
 
-pollMasters :: Delay -> [MasterServer] -> IO PollMasters
+pollMasters :: Delay -> [MasterServer] -> IO PollResult
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	bindSocket sock (SockAddrInet 0 0)
@@ -53,31 +53,31 @@ pollMasters Delay{..} masterservers = do
 			pureModifyMVar pingstate $ M.insertWith' (\_ b -> b) host now
 			sendTo sock getStatus host
 			if (n > 0) then
-				addScheduled sched (now + fromIntegral resendWait, host, QGame (n-1))
+				addScheduled sched (now + fromIntegral packetTimeout, host, QGame (n-1))
 			else
-				addScheduled sched (now + fromIntegral resendWait, host, QJustWait)
+				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
 			
 		QMaster n proto	-> do
 			now <- getMicroTime
 			sendTo sock (getServers proto) host
 			if (n > 0) then
-				addScheduled sched (now + (fromIntegral resendWait) `div` 2 , host, QMaster (n-1) proto)
+				addScheduled sched (now + (fromIntegral packetTimeout) `div` 2 , host, QMaster (n-1) proto)
 			else
-				addScheduled sched (now + fromIntegral resendWait, host, QJustWait)
+				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
 				
 
 		QJustWait -> return ()
 		
 
-	sched		<- newScheduler outBufferDelay sf (Just (sClose sock))
+	sched		<- newScheduler throughputDelay sf (Just (sClose sock))
 	addScheduledInstant sched $
-		map (\(MasterServer proto host) -> (host, QMaster (resendTimes*4) proto)) masterservers
+		map (\MasterServer{..} -> (masterAddress, QMaster (packetDuplication*4) masterProtocol)) masterservers
 
 	startScheduler sched
 	
 	let buildResponse = do
 		packet <- ioMaybe $ recvFrom sock mtu
-		case parsePacket (masterHost <$> masterservers) <$> packet of
+		case parsePacket (masterAddress <$> masterservers) <$> packet of
 			-- The master responded, great! Now lets send requests to the new servers
 			Just (Master host x) -> do
 				deleteScheduled sched host
@@ -86,7 +86,7 @@ pollMasters Delay{..} masterservers = do
 				putMVar' mstate m'
 				let delta = S.difference x m
 				when (S.size delta > 0) $ do
-					addScheduledInstant sched $ map (,QGame resendTimes) (S.toList delta)
+					addScheduledInstant sched $ map (,QGame packetDuplication) (S.toList delta)
 				
 				buildResponse
 
@@ -102,7 +102,7 @@ pollMasters Delay{..} masterservers = do
 					start	<- return $! M.lookup host ps
 					putMVar' pingstate $ M.delete host ps
 					putMVar' tstate $ S.insert host t
-					-- This also servers as protection against
+					-- This also serves as protection against
 					-- receiving responses for requests never sent
 					case start of
 						Nothing -> buildResponse
@@ -116,7 +116,7 @@ pollMasters Delay{..} masterservers = do
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
-	return $! PollMasters xs (S.size t) (S.size m) t
+	return $! PollResult xs (S.size t) (S.size m) t
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
@@ -138,9 +138,9 @@ pollOne Delay{..} sockaddr = do
 	where
 	f sock = do
 		connect sock sockaddr
-		pid <- forkIO $ whileJust resendTimes $ \n -> do
+		pid <- forkIO $ whileJust packetDuplication $ \n -> do
 			send sock getStatus
-			threadDelay resendWait
+			threadDelay packetTimeout
 			if n > 0 then
 				return $ Just (n-1)
 			else do

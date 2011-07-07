@@ -1,7 +1,7 @@
 module Network.Tremulous.Protocol (
 	  module Network.Tremulous.NameInsensitive
-	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollMasters(..)
-	, parseGameServer, proto2string, string2proto, parseMasterServer
+	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollResult(..)
+	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
 import Prelude as P
@@ -26,20 +26,20 @@ import Network.Tremulous.NameInsensitive
 import Network.Tremulous.TupleReader
 
 data Delay = Delay {
-	  resendWait
-	, resendTimes
-	, outBufferDelay	:: !Int
+	  packetTimeout
+	, packetDuplication
+	, throughputDelay	:: !Int
 	} deriving (Show, Read)
 
 data MasterServer = MasterServer {
-	  protocol	:: !Int
-	, masterHost	:: !SockAddr
+	   masterAddress	:: !SockAddr
+	 , masterProtocol	:: !Int
 	} deriving Eq
 	
 data GameServer = GameServer {
 	  address	:: !SockAddr
 	, gameping	:: !Int
-	, gameproto	:: !Int
+	, protocol	:: !Int
 	, gamemod	:: !(Maybe TI)
 	, hostname	:: !TI
 	, mapname	:: !TI
@@ -53,7 +53,6 @@ data GameServer = GameServer {
 	, players	:: ![Player]
 	}
 
-	
 data Team = Spectators | Aliens | Humans | Unknown deriving (Eq, Show)
 
 data Player = Player {
@@ -61,6 +60,13 @@ data Player = Player {
 	, kills
 	, ping	:: !Int
 	, name	:: !TI
+	}
+
+data PollResult = PollResult {
+	  polled		:: ![GameServer]
+	, serversResponded
+	, serversRequested	:: !Int
+	, respondedCache	:: !(Set SockAddr)
 	}
 
 
@@ -77,13 +83,13 @@ instance NFData GameServer where
 instance NFData Player where
 	rnf (Player a b c d)  = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
 
-data PollMasters = PollMasters {
-	  polled		:: ![GameServer]
-	, serversResponded
-	, serversRequested	:: !Int
-	, respondedCache	:: !(Set SockAddr)
+defaultDelay :: Delay
+defaultDelay = Delay {
+	  packetTimeout		= 400 * 1000
+	, packetDuplication	= 2
+	, throughputDelay	= 1 * 1000
 	}
-
+	
 -- Protocol version
 proto2string :: IsString s => Int ->  s
 proto2string x = case x of
@@ -138,7 +144,7 @@ mkGameServer :: SockAddr -> [ByteString] -> [(ByteString, ByteString)] -> Maybe 
 mkGameServer address rawplayers = tupleReader $ do
 	timelimit	<- option Nothing maybeInt "timelimit"
 	hostname	<- mkColorAlpha <$> require "sv_hostname"
-	gameproto	<- requireWith maybeInt "protocol"
+	protocol	<- requireWith maybeInt "protocol"
 	mapname		<- option (TI "" "") (mk . clean) "mapname"
 	gamemod		<- option Nothing mkMod "gamename"
 	p		<- option "" id "P"
