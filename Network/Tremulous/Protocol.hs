@@ -111,7 +111,7 @@ parsePlayer team = parseMaybe $ do
 	skipSpace
 	ping <- signed decimal
 	skipSpace
-	name <- mkColor <$> quoted
+	name <- mkColor . clean <$> quoted
 	return Player {..}
 	
 -- cvar P
@@ -143,7 +143,7 @@ parseGameServer address xs = case splitlines xs of
 mkGameServer :: SockAddr -> [ByteString] -> [(ByteString, ByteString)] -> Maybe GameServer
 mkGameServer address rawplayers = tupleReader $ do
 	timelimit	<- option Nothing maybeInt "timelimit"
-	hostname	<- mkColorAlpha <$> require "sv_hostname"
+	hostname	<- mkColor . clean <$> require "sv_hostname"
 	protocol	<- requireWith maybeInt "protocol"
 	mapname		<- option (TI "" "") (mk . clean) "mapname"
 	gamemod		<- option Nothing mkMod "gamename"
@@ -158,8 +158,7 @@ mkGameServer address rawplayers = tupleReader $ do
 	return GameServer { gameping = -1, nplayers = P.length players, .. }
 	where
 	mkMod "base"	= Nothing
-	mkMod a		= Just (mk a)
-	clean = stripw . B.filter isPrint
+	mkMod a		= Just (mk (clean a))
 
 
 parseMasterServer :: ByteString -> [SockAddr]	
@@ -191,3 +190,6 @@ parseMaybe :: Parser a -> ByteString -> Maybe a
 parseMaybe f xs = case parseOnly f xs of
 	Right a	-> Just a
 	Left _	-> Nothing
+
+clean :: ByteString -> ByteString
+clean = stripw . B.filter isPrint

@@ -1,5 +1,5 @@
 module Network.Tremulous.NameInsensitive (
-	TI(..), mk, mkColor, mkAlphaNum, mkColorAlpha, unpackorig
+	TI(..), mk, mkColor, mkAlphaNum, unpackorig
 ) where
 import Control.DeepSeq
 import Data.ByteString.Char8 as B
@@ -34,9 +34,6 @@ mkColor bs = TI bs (B.map toLower $ removeColors bs)
 
 mkAlphaNum :: ByteString -> TI
 mkAlphaNum bs = TI bs (B.map toLower $ B.filter isAlphaNum bs)
-
-mkColorAlpha :: ByteString -> TI
-mkColorAlpha bs = TI bs (B.map toLower $ B.filter isPrint $ removeColors bs)
 
 removeColors :: ByteString -> ByteString
 removeColors = B.pack . rc . B.unpack
