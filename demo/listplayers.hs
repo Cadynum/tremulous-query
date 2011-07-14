@@ -1,9 +1,11 @@
+-- This program NEEDS to be compiled with -threaded
 {-# LANGUAGE RecordWildCards #-}
 import Network.Socket
 import Network.Tremulous.Protocol
 import Network.Tremulous.Polling
-import Network.Tremulous.Util
 import Control.Monad
+import qualified Data.ByteString.Char8 as B
+import Text.Printf
 
 getDNS :: String -> String -> IO SockAddr
 getDNS host port =  do
@@ -14,9 +16,10 @@ main :: IO ()
 main = withSocketsDo $ do
 	host	<- getDNS "master.tremulous.net" "30710"
 	host2	<- getDNS "master.tremulous.net" "30700"
-	PollResult{..}	<- pollMasters defaultDelay	[ MasterServer 69 host
-							, MasterServer 70 host2 ]
-
-	print $ serversResponded
+	PollResult{..}	<- pollMasters defaultDelay	[ MasterServer host 69
+							, MasterServer host2 70 ]
+	printf "%d servers responded out of %d\n" serversResponded serversRequested
+	let plist = concatMap players polled
+	mapM_ (B.putStrLn . original . name)  plist
 
 

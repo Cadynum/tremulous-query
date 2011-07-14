@@ -1,5 +1,5 @@
 Name:			tremulous-query
-Version:		1.1
+Version:		1.0.2
 Author:			Christoffer Öjeling
 Maintainer:		Christoffer Öjeling <christoffer@ojeling.net>
 License:		GPL-3
@@ -33,6 +33,3 @@ Library
 
   Build-Depends:        base>=4.3 && < 5, old-time, network, deepseq, containers, bytestring, attoparsec, mtl
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
-
-
-

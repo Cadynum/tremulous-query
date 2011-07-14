@@ -48,31 +48,45 @@ newScheduler throughput func finalizer = do
 	where
 	runner sched@Scheduler{..} restore = do
 		takeMVar started
-		tid		<- myThreadId
-		syncid		<- forkIOUnmasked $ forever $ takeMVar sync >> throwTo tid Interrupt
+		tid <- myThreadId
 		let loop = do
-			q <- readMVar queue
+			q <- takeMVar queue
 			case viewl q of
 				EmptyL -> case finalizer of
 					Nothing -> do
+						putMVar queue q
 						ignoreException $ restore threadBlock
 						loop
-					Just a -> do
-						killThread syncid
-						a
-
-				(time, idn, storage) :< _ -> do
+					Just a -> a
+					
+				(-1, idn, storage) :< qs -> do
+					putMVar queue qs
+					func sched idn storage
+					when (throughput > 0)
+						(threadDelay throughput)
+					loop
+				
+				(time, idn, storage) :< qs -> do
 					now <- getMicroTime
 					let wait = fromInteger (time - now)
-					waited <- ((time == -1 || wait <= 0) ||) `liftM`
-						falseOnException (restore (threadDelay wait))
-					when waited $ do
-						pureModifyMVar queue $ deleteID idn
+					if wait <= 0 then do
+						putMVar queue qs
 						func sched idn storage
 						when (throughput > 0)
 							(threadDelay throughput)
+					else do
+						putMVar queue q
+						tryTakeMVar sync
+						syncid <- forkIOUnmasked $ takeMVar sync >> throwTo tid Interrupt
+						waited <- falseOnException $ restore $ threadDelay wait
+						when waited $ do
+							killThread syncid
+							pureModifyMVar queue $ deleteID idn
+							func sched idn storage
+							when (throughput > 0)
+								(threadDelay throughput)
 					loop
-		loop
+			in loop
 
 signal :: MVar () -> IO ()
 signal a = tryPutMVar a () >> return ()

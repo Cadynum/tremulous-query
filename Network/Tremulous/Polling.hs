@@ -85,7 +85,7 @@ pollMasters Delay{..} masterservers = do
 				let m' = S.union m x
 				putMVar' mstate m'
 				let delta = S.difference x m
-				when (S.size delta > 0) $ do
+				when (S.size delta > 0) $
 					addScheduledInstant sched $ map (,QGame packetDuplication) (S.toList delta)
 				
 				buildResponse
@@ -112,7 +112,6 @@ pollMasters Delay{..} masterservers = do
 			Just Invalid -> buildResponse
 			
 			Nothing -> return []
-			
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
