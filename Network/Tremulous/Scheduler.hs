@@ -1,18 +1,16 @@
 module Network.Tremulous.Scheduler(
 	  Event, Scheduler
 	, newScheduler, startScheduler, addScheduled, addScheduledBatch
-	, addScheduledInstant, deleteScheduled, getMicroTime
+	, addScheduledInstant, deleteScheduled
 ) where
 import Prelude hiding (drop)
 import Control.Monad
-import Control.Applicative hiding (empty)
 import Control.Concurrent
 import Control.Exception
 import Data.Typeable
 import Data.Sequence
 import Data.Foldable
-import System.Time
-
+import Network.Tremulous.MicroTime
 
 data Interrupt = Interrupt
 	deriving (Typeable, Show)
@@ -22,10 +20,10 @@ instance Exception Interrupt
 data (Eq id, Ord id) => Scheduler id a = Scheduler
 	{ sync		:: !(MVar ())
 	, started	:: !(MVar ())
-	, queue		:: !(MVar (Seq (Integer, id, a)))
+	, queue		:: !(MVar (Seq (Event id a)))
 	}
 
-type Event id a = (Integer, id, a)
+type Event id a = (MicroTime, id, a)
 
 -- ugly ugly ugly!
 threadBlock :: IO ()
@@ -59,7 +57,7 @@ newScheduler throughput func finalizer = do
 						loop
 					Just a -> a
 					
-				(-1, idn, storage) :< qs -> do
+				(0, idn, storage) :< qs -> do
 					putMVar queue qs
 					func sched idn storage
 					when (throughput > 0)
@@ -68,7 +66,7 @@ newScheduler throughput func finalizer = do
 				
 				(time, idn, storage) :< qs -> do
 					now <- getMicroTime
-					let wait = fromInteger (time - now)
+					let wait = fromIntegral (time - now)
 					if wait <= 0 then do
 						putMVar queue qs
 						func sched idn storage
@@ -106,16 +104,13 @@ addScheduledBatch Scheduler{..} events = do
 
 addScheduledInstant :: (Ord id, Eq id, Foldable f) => Scheduler id a -> f (id, a) -> IO ()
 addScheduledInstant Scheduler{..} events = do
-	pureModifyMVar queue $ \q -> foldl' (\acc (a, b) -> (-1, a, b) <| acc) q events
+	pureModifyMVar queue $ \q -> foldl' (\acc (a, b) -> (0, a, b) <| acc) q events
 	signal sync
 
 deleteScheduled :: (Ord id, Eq id) => Scheduler id a -> id -> IO ()
 deleteScheduled Scheduler{..} ident = do
 	pureModifyMVar queue $ deleteID ident
 	signal sync
-
-getMicroTime :: IO Integer
-getMicroTime = let f (TOD s p) = s*1000000 + p `div` 1000000 in f <$> getClockTime
 
 ignoreException :: IO () -> IO ()
 ignoreException = handle (\Interrupt -> return ())

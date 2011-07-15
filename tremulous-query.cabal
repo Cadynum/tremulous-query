@@ -29,7 +29,8 @@ Library
                         Network.Tremulous.SocketExtensions
                         Network.Tremulous.ByteStringUtils
                         Network.Tremulous.Scheduler
+                        Network.Tremulous.MicroTime
   Other-Modules:        Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.3 && < 5, old-time, network, deepseq, containers, bytestring, attoparsec, mtl
+  Build-Depends:        base>=4.3 && < 5, network, deepseq, containers, bytestring, attoparsec, mtl
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields

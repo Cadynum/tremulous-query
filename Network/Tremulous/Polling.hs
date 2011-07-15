@@ -22,6 +22,7 @@ import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Tremulous.Protocol
 import Network.Tremulous.ByteStringUtils as B
+import Network.Tremulous.MicroTime
 import Network.Tremulous.Scheduler
 
 data QType = QMaster !Int !Int | QGame !Int | QJustWait
@@ -45,7 +46,7 @@ pollMasters Delay{..} masterservers = do
 	tstate		<- newMVar S.empty
 	
 	-- When first packet was sent to server (removed on proper response)
-	pingstate	<- newMVar (M.empty :: Map SockAddr Integer)
+	pingstate	<- newMVar (M.empty :: Map SockAddr MicroTime)
 
 	let sf sched host qtype = case qtype of
 		QGame n		-> do
@@ -107,7 +108,7 @@ pollMasters Delay{..} masterservers = do
 					case start of
 						Nothing -> buildResponse
 						Just a	-> do
-							let gameping = fromInteger (now - a) `div` 1000
+							let gameping = fromIntegral (now - a) `div` 1000
 							( strict x{ gameping } : ) `liftM` buildResponse			
 			Just Invalid -> buildResponse
 			
@@ -151,7 +152,7 @@ pollOne Delay{..} sockaddr = do
 		sClose sock
 		killThread pid
 		stop	<- getMicroTime
-		let gameping = fromInteger (stop - start) `div` 1000
+		let gameping = fromIntegral (stop - start) `div` 1000
 		return $ (\x -> x {gameping}) <$> 
 			(parseGameServer sockaddr =<< isProper =<< poll)
 	err sock (_::IOError) = sClose sock >> return Nothing
