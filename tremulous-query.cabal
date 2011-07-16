@@ -33,4 +33,6 @@ Library
   Other-Modules:        Network.Tremulous.TupleReader
 
   Build-Depends:        base>=4.3 && < 5, network, deepseq, containers, bytestring, attoparsec, mtl
+  if os(windows)
+      Build-Depends:    Win32
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
