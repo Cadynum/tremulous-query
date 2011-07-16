@@ -36,11 +36,11 @@ mkAlphaNum :: ByteString -> TI
 mkAlphaNum bs = TI bs (B.map toLower $ B.filter isAlphaNum bs)
 
 removeColors :: ByteString -> ByteString
-removeColors = B.pack . rc . B.unpack
-
-rc :: String -> String
-rc ('^' : x : xs) | isAlphaNum x	= rc xs
-rc (x : xs)				= x : rc xs
-rc [] 					= []
+removeColors = B.unfoldr f where
+	f bs	| Just ('^', xs) <- t
+		, Just (x, xs2)  <- B.uncons xs
+		, isAlphaNum x		= B.uncons xs2
+		| otherwise		= t
+		where t = B.uncons bs
 
 
