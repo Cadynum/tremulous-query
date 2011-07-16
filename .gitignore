@@ -5,3 +5,5 @@ dist
 *.chs.h
 *.aux
 *.ps
+*.prof
+*.hp

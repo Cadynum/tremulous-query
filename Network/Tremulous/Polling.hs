@@ -130,7 +130,6 @@ parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" cont
 	parseServer x = parseGameServer host =<< stripPrefix "statusResponse" x
 
 
-
 pollOne :: Delay -> SockAddr -> IO (Maybe GameServer)
 pollOne Delay{..} sockaddr = do
 	s <- socket AF_INET Datagram defaultProtocol
