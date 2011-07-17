@@ -1,5 +1,6 @@
 module Network.Tremulous.Util (
 	serverByAddress
+	, elemByAddress
 	, search
 	, makePlayerList
 	, makePlayerNameList
@@ -17,7 +18,10 @@ import Network.Tremulous.Protocol as T
 
 
 serverByAddress :: SockAddr -> [GameServer] -> Maybe GameServer
-serverByAddress add =  find (\x -> add == address x)
+serverByAddress add = find (\x -> add == address x)
+
+elemByAddress :: SockAddr -> [GameServer] -> Bool
+elemByAddress add = any (\x -> add == address x)
 
 search :: String -> [GameServer] -> [(TI, GameServer)]
 search ""	= makePlayerNameList 
