@@ -1,14 +1,13 @@
 module Network.Tremulous.Scheduler(
 	  Event, Scheduler
-	, newScheduler, startScheduler, addScheduled, addScheduledBatch
+	, newScheduler, addScheduled, addScheduledBatch
 	, addScheduledInstant, deleteScheduled
 ) where
-import Prelude hiding (drop)
+import Prelude
 import Control.Monad
 import Control.Concurrent
 import Control.Exception
 import Data.Typeable
-import Data.Sequence
 import Data.Foldable
 import Network.Tremulous.MicroTime
 
@@ -19,8 +18,7 @@ instance Exception Interrupt
 
 data (Eq id, Ord id) => Scheduler id a = Scheduler
 	{ sync		:: !(MVar ())
-	, started	:: !(MVar ())
-	, queue		:: !(MVar (Seq (Event id a)))
+	, queue		:: !(MVar [Event id a])
 	}
 
 type Event id a = (MicroTime, id, a)
@@ -36,38 +34,35 @@ pureModifyMVar m f = do
 
 newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
 newScheduler throughput func finalizer = do 
-	queue		<- newMVar empty
+	queue		<- newMVar []
 	sync		<- newEmptyMVar
-	started		<- newEmptyMVar
 	let sched	=  Scheduler{..}
 	uninterruptibleMask $ \a -> forkIO $ runner sched a
 	return sched
 	
 	where
 	runner sched@Scheduler{..} restore = do
-		takeMVar started
+		takeMVar sync
 		tid <- myThreadId
 		let loop = do
 			q <- takeMVar queue
-			case viewl q of
-				EmptyL -> case finalizer of
+			case q of
+				[] -> putMVar queue q >> case finalizer of
 					Nothing -> do
-						putMVar queue q
-						ignoreException $ restore threadBlock
+						ignoreInterrupt $ restore threadBlock
 						loop
 					Just a -> a
 					
-				(0, idn, storage) :< qs -> do
+				(0, idn, storage) : qs -> do
 					putMVar queue qs
 					func sched idn storage
 					when (throughput > 0)
 						(threadDelay throughput)
 					loop
 				
-				(time, idn, storage) :< qs -> do
+				(time, idn, storage) : qs -> do
 					now <- getMicroTime
-					let wait = fromIntegral (time - now)
-					if wait <= 0 then do
+					if now >= time then do
 						putMVar queue qs
 						func sched idn storage
 						when (throughput > 0)
@@ -76,7 +71,8 @@ newScheduler throughput func finalizer = do
 						putMVar queue q
 						tryTakeMVar sync
 						syncid <- forkIOUnmasked $ takeMVar sync >> throwTo tid Interrupt
-						waited <- falseOnException $ restore $ threadDelay wait
+						let wait = fromIntegral (time - now)
+						waited <- falseOnInterrupt $ restore $ threadDelay wait
 						when waited $ do
 							killThread syncid
 							pureModifyMVar queue $ deleteID idn
@@ -89,10 +85,7 @@ newScheduler throughput func finalizer = do
 signal :: MVar () -> IO ()
 signal a = tryPutMVar a () >> return ()
 
-startScheduler :: (Ord id, Eq id, Show id) => Scheduler id a -> IO ()
-startScheduler Scheduler{..} = putMVar started ()
-
-addScheduled :: (Ord id, Eq id, Show id) => Scheduler id a -> Event id a -> IO ()
+addScheduled :: (Ord id, Eq id) => Scheduler id a -> Event id a -> IO ()
 addScheduled Scheduler{..} event = do
 	pureModifyMVar queue $ insertTimed event
 	signal sync
@@ -102,9 +95,9 @@ addScheduledBatch Scheduler{..} events = do
 	pureModifyMVar queue $ \q -> foldl' (flip insertTimed) q events
 	signal sync
 
-addScheduledInstant :: (Ord id, Eq id, Foldable f) => Scheduler id a -> f (id, a) -> IO ()
+addScheduledInstant :: (Ord id, Eq id) => Scheduler id a -> [(id, a)] -> IO ()
 addScheduledInstant Scheduler{..} events = do
-	pureModifyMVar queue $ \q -> foldl' (\acc (a, b) -> (0, a, b) <| acc) q events
+	pureModifyMVar queue $ \q -> (map (\(a,b) -> (0,a,b)) events) ++ q
 	signal sync
 
 deleteScheduled :: (Ord id, Eq id) => Scheduler id a -> id -> IO ()
@@ -112,19 +105,19 @@ deleteScheduled Scheduler{..} ident = do
 	pureModifyMVar queue $ deleteID ident
 	signal sync
 
-ignoreException :: IO () -> IO ()
-ignoreException = handle (\Interrupt -> return ())
+ignoreInterrupt :: IO () -> IO ()
+ignoreInterrupt = handle (\Interrupt -> return ())
 
-falseOnException :: IO a -> IO Bool
-falseOnException f = handle (\Interrupt -> return False) (f >> return True)
-
-
-insertTimed :: (Ord id, Eq id) => Event id a -> Seq (Event id a) -> Seq (Event id a)
-insertTimed x@(a,_,_) q = (s1 |> x) >< s2 where
-	(s1, s2) = spanl (\(b,_,_) -> a >= b) q
+falseOnInterrupt :: IO a -> IO Bool
+falseOnInterrupt f = handle (\Interrupt -> return False) (f >> return True)
 
 
-deleteID :: (Ord id, Eq id) => id -> Seq (Event id a) -> Seq (Event id a)
-deleteID ident q = s1 >< s2' where
-	(s1, s2) = spanl (\(_,a,_) -> a /= ident) q
-	s2' = drop 1 s2 
+insertTimed :: (Ord id, Eq id) => Event id a -> [Event id a] -> [Event id a]
+insertTimed x@(a, _, _) q = s1 ++ x : s2 where
+	(s1, s2) = span (\(b,_,_) -> a >= b) q
+
+deleteID :: (Ord id, Eq id) => id -> [Event id a] -> [Event id a]
+deleteID idn xss = case xss of
+	x@(_,a,_):xs	| a == idn	-> xs
+			| otherwise	-> x : deleteID idn xs
+	[]				-> []

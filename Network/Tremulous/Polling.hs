@@ -5,8 +5,7 @@ import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
 
 import Control.DeepSeq
 import Control.Monad hiding (mapM_, sequence_)
-import Control.Concurrent (forkIO, threadDelay, killThread)
-import Control.Concurrent.MVar
+import Control.Concurrent
 import Control.Applicative
 import Control.Exception
 
@@ -25,7 +24,7 @@ import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.MicroTime
 import Network.Tremulous.Scheduler
 
-data QType = QMaster !Int !Int | QGame !Int | QJustWait
+data QType = QMaster !Int !Int | QGame !Int | QJustWait deriving Show
 
 mtu :: Int
 mtu = 2048
@@ -40,6 +39,8 @@ pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	bindSocket sock (SockAddrInet 0 0)
 	
+	finished	<- newEmptyMVar
+	
 	-- server addresses recieved by master
 	mstate		<- newMVar S.empty
 	-- Servers that has responded
@@ -49,42 +50,38 @@ pollMasters Delay{..} masterservers = do
 	pingstate	<- newMVar (M.empty :: Map SockAddr MicroTime)
 
 	let sf sched host qtype = case qtype of
-		QGame n		-> do
+		QGame n -> do
 			now <- getMicroTime
-			pureModifyMVar pingstate $ M.insertWith' (\_ b -> b) host now
+			when (n == packetDuplication) $
+				pureModifyMVar pingstate $ M.insert host now
 			sendTo sock getStatus host
-			if (n > 0) then
+			if (n > 0) then do
 				addScheduled sched (now + fromIntegral packetTimeout, host, QGame (n-1))
-			else
+			else do
 				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
 			
 		QMaster n proto	-> do
 			now <- getMicroTime
 			sendTo sock (getServers proto) host
-			if (n > 0) then
-				addScheduled sched (now + (fromIntegral packetTimeout) `div` 2 , host, QMaster (n-1) proto)
-			else
+			if (n > 0) then do
+				addScheduled sched (now + fromIntegral packetTimeout `div` 2 , host, QMaster (n-1) proto)
+			else do
 				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
 				
-
 		QJustWait -> return ()
 		
-
-	sched		<- newScheduler throughputDelay sf (Just (sClose sock))
+	sched		<- newScheduler throughputDelay sf (Just (putMVar finished () >> sClose sock))
 	addScheduledInstant sched $
 		map (\MasterServer{..} -> (masterAddress, QMaster (packetDuplication*4) masterProtocol)) masterservers
 
-	startScheduler sched
-	
 	let buildResponse = do
-		packet <- ioMaybe $ recvFrom sock mtu
-		case parsePacket (masterAddress <$> masterservers) <$> packet of
+		packet <- forceIO finished $ recvFrom sock mtu
+		case parsePacket (map masterAddress masterservers) <$> packet of
 			-- The master responded, great! Now lets send requests to the new servers
 			Just (Master host x) -> do
 				deleteScheduled sched host
 				m <- takeMVar mstate
-				let m' = S.union m x
-				putMVar' mstate m'
+				putMVar' mstate (S.union m x)
 				let delta = S.difference x m
 				when (S.size delta > 0) $
 					addScheduledInstant sched $ map (,QGame packetDuplication) (S.toList delta)
@@ -113,10 +110,15 @@ pollMasters Delay{..} masterservers = do
 			Just Invalid -> buildResponse
 			
 			Nothing -> return []
+
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
 	return $! PollResult xs (S.size t) (S.size m) t
+		
+	where forceIO m f = catch (Just <$> f) $ \(_ :: IOError) -> do
+		b <- isEmptyMVar m 
+		if b then forceIO m f else return Nothing
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
 
@@ -131,42 +133,35 @@ parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" cont
 
 
 pollOne :: Delay -> SockAddr -> IO (Maybe GameServer)
-pollOne Delay{..} sockaddr = do
-	s <- socket AF_INET Datagram defaultProtocol
-	catch (f s) (err s)
+pollOne Delay{..} sockaddr = handle err $ bracket (socket AF_INET Datagram defaultProtocol) sClose $ \sock -> do
+	connect sock sockaddr
+	pid <- forkIO $ whileJust packetDuplication $ \n -> do
+		send sock getStatus
+		threadDelay packetTimeout
+		if n > 0 then
+			return $ Just (n-1)
+		else do
+			sClose sock
+			return Nothing
+		
+	start	<- getMicroTime
+	poll	<- ioMaybe $ recv sock mtu <* killThread pid
+	stop	<- getMicroTime
+	let gameping = fromIntegral (stop - start) `div` 1000
+	return $ (\x -> x {gameping}) <$> 
+		(parseGameServer sockaddr =<< isProper =<< poll)
 	where
-	f sock = do
-		connect sock sockaddr
-		pid <- forkIO $ whileJust packetDuplication $ \n -> do
-			send sock getStatus
-			threadDelay packetTimeout
-			if n > 0 then
-				return $ Just (n-1)
-			else do
-				sClose sock
-				return Nothing
-			
-		start	<- getMicroTime
-		poll	<- ioMaybe $ recv sock mtu
-		sClose sock
-		killThread pid
-		stop	<- getMicroTime
-		let gameping = fromIntegral (stop - start) `div` 1000
-		return $ (\x -> x {gameping}) <$> 
-			(parseGameServer sockaddr =<< isProper =<< poll)
-	err sock (_::IOError) = sClose sock >> return Nothing
+	err (_ :: IOError) = return Nothing
 	isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
 
 ioMaybe :: IO a -> IO (Maybe a)
 ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
 
-putMVar' :: NFData a => MVar a -> a -> IO ()
-putMVar' m a = rnf a `seq` putMVar m a
+putMVar' :: MVar a -> a -> IO ()
+putMVar' m a = a `seq` putMVar m a
 
-pureModifyMVar :: NFData a => MVar a -> (a -> a) -> IO ()
-pureModifyMVar m f = do
-	x <- takeMVar m
-	putMVar' m (f x)
+pureModifyMVar :: MVar a -> (a -> a) -> IO ()
+pureModifyMVar m f = putMVar' m . f =<< takeMVar m
 	
 strict :: NFData a => a -> a
 strict x = x `deepseq` x
