@@ -20,10 +20,11 @@ data (Eq id, Ord id) => Scheduler id a = Scheduler
 	, queue		:: !(MVar [Event id a])
 	}
 
-data Event id a = E !MicroTime !id !a
-
-pureModifyMVar ::MVar a -> (a -> a) -> IO ()
-pureModifyMVar m f = putMVar m . f =<< takeMVar m
+data Event id a = E
+	{ time		:: !MicroTime
+	, idn		:: !id
+	, storage	:: !a
+	}
 
 newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
 newScheduler throughput func finalizer = do 
@@ -46,14 +47,14 @@ newScheduler throughput func finalizer = do
 						loop
 					Just a -> a
 					
-				E 0 idn storage : qs -> do
+				E{time=0, ..} : qs -> do
 					putMVar queue qs
 					func sched idn storage
 					when (throughput > 0)
 						(threadDelay throughput)
 					loop
 				
-				E time idn storage : qs -> do
+				E {..} : qs -> do
 					now <- getMicroTime
 					if now >= time then do
 						putMVar queue qs
@@ -102,13 +103,17 @@ deleteScheduled Scheduler{..} ident = do
 falseOnInterrupt :: IO a -> IO Bool
 falseOnInterrupt f = handle (\Interrupt -> return False) (f >> return True)
 
-
 insertTimed :: (Ord id, Eq id) => Event id a -> [Event id a] -> [Event id a]
-insertTimed x@(E a _ _) q = s1 ++ x : s2 where
-	(s1, s2) = span (\(E b _ _) -> a >= b) q
+insertTimed e (x:xs)
+	| time e >= time x	= x : insertTimed e xs
+	| otherwise		= e : x : xs
+insertTimed e []		= [e]
 
 deleteID :: (Ord id, Eq id) => id -> [Event id a] -> [Event id a]
-deleteID idn xss = case xss of
-	x@(E _ a _):xs	| a == idn	-> xs
-			| otherwise	-> x : deleteID idn xs
+deleteID match xss = case xss of
+	x:xs	| idn x == match	-> xs
+		| otherwise		-> x : deleteID match xs
 	[]				-> []
+
+pureModifyMVar ::MVar a -> (a -> a) -> IO ()
+pureModifyMVar m f = putMVar m . f =<< takeMVar m
