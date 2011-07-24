@@ -1,9 +1,8 @@
 module Network.Tremulous.Scheduler(
-	  Event, Scheduler
+	  Event(..), Scheduler
 	, newScheduler, addScheduled, addScheduledBatch
 	, addScheduledInstant, deleteScheduled
 ) where
-import Prelude
 import Control.Monad
 import Control.Concurrent
 import Control.Exception
@@ -21,16 +20,10 @@ data (Eq id, Ord id) => Scheduler id a = Scheduler
 	, queue		:: !(MVar [Event id a])
 	}
 
-type Event id a = (MicroTime, id, a)
-
--- ugly ugly ugly!
-threadBlock :: IO ()
-threadBlock = forever $ threadDelay maxBound
+data Event id a = E !MicroTime !id !a
 
 pureModifyMVar ::MVar a -> (a -> a) -> IO ()
-pureModifyMVar m f = do
-	x <- takeMVar m
-	putMVar m (f x)
+pureModifyMVar m f = putMVar m . f =<< takeMVar m
 
 newScheduler :: (Eq a, Ord a) => Int -> (Scheduler a b -> a -> b -> IO ()) -> Maybe (IO ()) -> IO (Scheduler a b)
 newScheduler throughput func finalizer = do 
@@ -49,18 +42,18 @@ newScheduler throughput func finalizer = do
 			case q of
 				[] -> putMVar queue q >> case finalizer of
 					Nothing -> do
-						ignoreInterrupt $ restore threadBlock
+						takeMVar sync
 						loop
 					Just a -> a
 					
-				(0, idn, storage) : qs -> do
+				E 0 idn storage : qs -> do
 					putMVar queue qs
 					func sched idn storage
 					when (throughput > 0)
 						(threadDelay throughput)
 					loop
 				
-				(time, idn, storage) : qs -> do
+				E time idn storage : qs -> do
 					now <- getMicroTime
 					if now >= time then do
 						putMVar queue qs
@@ -97,7 +90,7 @@ addScheduledBatch Scheduler{..} events = do
 
 addScheduledInstant :: (Ord id, Eq id) => Scheduler id a -> [(id, a)] -> IO ()
 addScheduledInstant Scheduler{..} events = do
-	pureModifyMVar queue $ \q -> (map (\(a,b) -> (0,a,b)) events) ++ q
+	pureModifyMVar queue $ \q -> (map (uncurry (E 0)) events) ++ q
 	signal sync
 
 deleteScheduled :: (Ord id, Eq id) => Scheduler id a -> id -> IO ()
@@ -105,19 +98,17 @@ deleteScheduled Scheduler{..} ident = do
 	pureModifyMVar queue $ deleteID ident
 	signal sync
 
-ignoreInterrupt :: IO () -> IO ()
-ignoreInterrupt = handle (\Interrupt -> return ())
 
 falseOnInterrupt :: IO a -> IO Bool
 falseOnInterrupt f = handle (\Interrupt -> return False) (f >> return True)
 
 
 insertTimed :: (Ord id, Eq id) => Event id a -> [Event id a] -> [Event id a]
-insertTimed x@(a, _, _) q = s1 ++ x : s2 where
-	(s1, s2) = span (\(b,_,_) -> a >= b) q
+insertTimed x@(E a _ _) q = s1 ++ x : s2 where
+	(s1, s2) = span (\(E b _ _) -> a >= b) q
 
 deleteID :: (Ord id, Eq id) => id -> [Event id a] -> [Event id a]
 deleteID idn xss = case xss of
-	x@(_,a,_):xs	| a == idn	-> xs
+	x@(E _ a _):xs	| a == idn	-> xs
 			| otherwise	-> x : deleteID idn xs
 	[]				-> []

@@ -56,17 +56,17 @@ pollMasters Delay{..} masterservers = do
 				pureModifyMVar pingstate $ M.insert host now
 			sendTo sock getStatus host
 			if (n > 0) then do
-				addScheduled sched (now + fromIntegral packetTimeout, host, QGame (n-1))
+				addScheduled sched $ E (now + fromIntegral packetTimeout) host (QGame (n-1))
 			else do
-				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
+				addScheduled sched $ E (now + fromIntegral packetTimeout) host QJustWait
 			
 		QMaster n proto	-> do
 			now <- getMicroTime
 			sendTo sock (getServers proto) host
 			if (n > 0) then do
-				addScheduled sched (now + fromIntegral packetTimeout `div` 2 , host, QMaster (n-1) proto)
+				addScheduled sched $ E (now + fromIntegral packetTimeout `div` 2) host (QMaster (n-1) proto)
 			else do
-				addScheduled sched (now + fromIntegral packetTimeout, host, QJustWait)
+				addScheduled sched $ E (now + fromIntegral packetTimeout) host QJustWait
 				
 		QJustWait -> return ()
 		
