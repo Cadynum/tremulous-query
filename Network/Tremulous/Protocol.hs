@@ -5,11 +5,11 @@ module Network.Tremulous.Protocol (
 	, B.unpack
 ) where
 import Prelude as P
-import Control.Applicative
+import Control.Applicative hiding (many)
 import Control.DeepSeq
 import Control.Monad.State.Strict
 
-import Data.Attoparsec.Char8 as A hiding (option)
+import Data.Attoparsec.Char8 hiding (option)
 import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 import Data.Maybe
@@ -162,15 +162,14 @@ mkGameServer address rawplayers = tupleReader $ do
 
 
 parseMasterServer :: ByteString -> [SockAddr]	
-parseMasterServer = fromMaybe [] . parseMaybe attoIP
+parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 	where
-	attoIP = A.many (char '\\' *> addr)
 	(.<<.) :: Bits a => a -> Int -> a
 	(.<<.) = shiftL		
 	wg :: Integral i => Parser i
-	wg = fromIntegral <$> anyWord8	
+	wg = fromIntegral <$> anyWord8
 	addr = do
-		-- try $ string "EOT\0\0\0" *> endOfInput
+		char '\\'
 		i0 <- wg
 		i1 <- wg
 		i2 <- wg
@@ -178,8 +177,10 @@ parseMasterServer = fromMaybe [] . parseMaybe attoIP
 		p0 <- wg
 		p1 <- wg
 		let ip = (i3 .<<. 24) .|. (i2 .<<. 16) .|. (i1 .<<. 8) .|. i0 :: Word32
-		let port = (p0 .<<. 8) .|. p1 :: Word16
-		return $ SockAddrInet (fromIntegral port) ip
+		let port = (p1 .<<. 8) .|. p0 :: Word16
+		if port == 0 || ip == 0
+			then addr
+			else return (SockAddrInet (PortNum port) ip)
 
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
