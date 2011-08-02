@@ -6,7 +6,6 @@ module Network.Tremulous.Protocol (
 ) where
 import Prelude as P
 import Control.Applicative hiding (many)
-import Control.DeepSeq
 import Control.Monad.State.Strict
 
 import Data.Attoparsec.Char8 hiding (option)
@@ -18,7 +17,6 @@ import Data.Char
 import Data.Bits
 import Data.Word
 import Data.Set (Set)
-
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.SocketExtensions ()
@@ -68,20 +66,6 @@ data PollResult = PollResult {
 	, serversRequested	:: !Int
 	, respondedCache	:: !(Set SockAddr)
 	}
-
-
-instance NFData MasterServer where
-	rnf (MasterServer a b) = rnf a `seq` rnf b
-
-instance NFData Team
-
-instance NFData GameServer where
-	rnf (GameServer a b c d e f g h i j k l m n) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
-		`seq` rnf e `seq` rnf f `seq` rnf g `seq` rnf h `seq` rnf i `seq` rnf j 
-		`seq` rnf k `seq` rnf l `seq` rnf m `seq` rnf n
-
-instance NFData Player where
-	rnf (Player a b c d)  = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
 
 defaultDelay :: Delay
 defaultDelay = Delay {

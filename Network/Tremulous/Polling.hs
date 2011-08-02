@@ -3,7 +3,6 @@ module Network.Tremulous.Polling (
 ) where
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
 
-import Control.DeepSeq
 import Control.Monad hiding (mapM_, sequence_)
 import Control.Concurrent
 import Control.Applicative
@@ -104,7 +103,7 @@ pollMasters Delay{..} masterservers = do
 						Nothing -> buildResponse
 						Just a	-> do
 							let gameping = fromIntegral (now - a) `div` 1000
-							( strict x{ gameping } : ) `liftM` buildResponse			
+							(x{ gameping } :) `liftM` buildResponse			
 			Just Invalid -> buildResponse
 			
 			Nothing -> return []
@@ -161,9 +160,7 @@ putMVar' m a = a `seq` putMVar m a
 
 pureModifyMVar :: MVar a -> (a -> a) -> IO ()
 pureModifyMVar m f = putMVar' m . f =<< takeMVar m
-	
-strict :: NFData a => a -> a
-strict x = x `deepseq` x
+
 
 whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
 whileJust x f  = f x >>= \c -> case c of

@@ -1,11 +1,8 @@
 module Network.Tremulous.ByteStringUtils where
 import Prelude as P
 import Control.Applicative
-import Control.DeepSeq
 import Data.ByteString.Char8 as B
 import Data.Char
-
-instance NFData ByteString 
 
 stripPrefix :: ByteString -> ByteString -> Maybe ByteString
 stripPrefix p xs

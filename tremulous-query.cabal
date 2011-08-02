@@ -1,5 +1,5 @@
 Name:			tremulous-query
-Version:		1.0.3
+Version:		1.0.4
 Author:			Christoffer Öjeling
 Maintainer:		Christoffer Öjeling <christoffer@ojeling.net>
 License:		GPL-3
@@ -32,7 +32,7 @@ Library
                         Network.Tremulous.MicroTime
   Other-Modules:        Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.3 && < 5, network, deepseq, containers, bytestring, attoparsec, mtl
+  Build-Depends:        base>=4.3 && < 5, network, containers, bytestring, attoparsec, mtl
   if os(windows)
       Build-Depends:    Win32
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
