@@ -14,12 +14,10 @@ import Data.ByteString.Char8 as B
 import Data.Maybe
 import Data.String
 import Data.Char
-import Data.Bits
-import Data.Word
 import Data.Set (Set)
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
-import Network.Tremulous.SocketExtensions ()
+import Network.Tremulous.SocketExtensions 
 import Network.Tremulous.NameInsensitive
 import Network.Tremulous.TupleReader
 
@@ -147,24 +145,14 @@ mkGameServer address rawplayers = tupleReader $ do
 
 parseMasterServer :: ByteString -> [SockAddr]	
 parseMasterServer = fromMaybe [] . parseMaybe (many addr)
-	where
-	(.<<.) :: Bits a => a -> Int -> a
-	(.<<.) = shiftL		
-	wg :: Integral i => Parser i
-	wg = fromIntegral <$> anyWord8
+	where	
+	wg = anyWord8
 	addr = do
 		char '\\'
-		i0 <- wg
-		i1 <- wg
-		i2 <- wg
-		i3 <- wg
-		p0 <- wg
-		p1 <- wg
-		let ip = (i3 .<<. 24) .|. (i2 .<<. 16) .|. (i1 .<<. 8) .|. i0 :: Word32
-		let port = (p1 .<<. 8) .|. p0 :: Word16
-		if port == 0 || ip == 0
-			then addr
-			else return (SockAddrInet (PortNum port) ip)
+		a <- getIPv4 <$> wg <*> wg <*> wg <*> wg <*> wg <*> wg
+		case a of
+			SockAddrInet (PortNum 0) 0	-> addr
+			_				-> return a
 
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
