@@ -4,16 +4,15 @@ module Network.Tremulous.Protocol (
 	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
 	, B.unpack
 ) where
-import Prelude as P
+import Prelude as P hiding (Maybe(..))
 import Control.Applicative hiding (many)
 import Control.Monad.State.Strict
 
 import Data.Attoparsec.Char8 hiding (option)
 import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
-import Data.Maybe
+import Network.Tremulous.StrictMaybe as SM
 import Data.String
-import Data.Char
 import Data.Set (Set)
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
@@ -36,14 +35,14 @@ data GameServer = GameServer {
 	  address	:: !SockAddr
 	, gameping	:: !Int
 	, protocol	:: !Int
-	, gamemod	:: !(Maybe TI)
+	, gamemod	:: !(SM.Maybe TI)
 	, hostname	:: !TI
 	, mapname	:: !TI
 	, slots
 	, privslots	:: !Int
 	, protected	:: !Bool
 	, timelimit
-	, suddendeath	:: !(Maybe Int)
+	, suddendeath	:: !(SM.Maybe Int)
 	, unlagged	:: !Bool
 	, nplayers	:: !Int
 	, players	:: ![Player]
@@ -93,7 +92,7 @@ parsePlayer team = parseMaybe $ do
 	skipSpace
 	ping <- signed decimal
 	skipSpace
-	name <- mkColor . clean <$> quoted
+	name <- mkColor <$> quoted
 	return Player {..}
 	
 -- cvar P
@@ -109,7 +108,7 @@ parseP = foldr' f []
 		'2'	-> Humans
 		_	-> Unknown
 
-parsePlayers :: ByteString -> [ByteString] -> Maybe [Player]
+parsePlayers :: ByteString -> [ByteString] -> SM.Maybe [Player]
 parsePlayers p = zipWithM parsePlayer (parseP p ++ repeat Unknown)
 
 parseCVars :: ByteString -> [(ByteString, ByteString)]
@@ -124,11 +123,11 @@ parseGameServer address xs = case splitlines xs of
 
 mkGameServer :: SockAddr -> [ByteString] -> [(ByteString, ByteString)] -> Maybe GameServer
 mkGameServer address rawplayers = tupleReader $ do
-	timelimit	<- option Nothing maybeInt "timelimit"
-	hostname	<- mkColor . clean <$> require "sv_hostname"
+	timelimit	<- option SM.Nothing maybeInt "timelimit"
+	hostname	<- mkColor <$> require "sv_hostname"
 	protocol	<- requireWith maybeInt "protocol"
-	mapname		<- option (TI "" "") (mk . clean) "mapname"
-	gamemod		<- option Nothing mkMod "gamename"
+	mapname		<- option (TI "" "") (mk) "mapname"
+	gamemod		<- option SM.Nothing mkMod "gamename"
 	p		<- option "" id "P"
 	players		<- lift $ parsePlayers p rawplayers
 	protected	<- option False (/="0") "g_needpass"
@@ -139,8 +138,8 @@ mkGameServer address rawplayers = tupleReader $ do
 	
 	return GameServer { gameping = -1, nplayers = P.length players, .. }
 	where
-	mkMod "base"	= Nothing
-	mkMod a		= Just (mk (clean a))
+	mkMod "base"	= SM.Nothing
+	mkMod a		= SM.Just (mk a)
 
 
 parseMasterServer :: ByteString -> [SockAddr]	
@@ -159,10 +158,7 @@ parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 quoted :: Parser ByteString
 quoted = char '"' *> takeTill (=='"') <* char '"'
 
-parseMaybe :: Parser a -> ByteString -> Maybe a
+parseMaybe :: Parser a -> ByteString -> SM.Maybe a
 parseMaybe f xs = case parseOnly f xs of
-	Right a	-> Just a
-	Left _	-> Nothing
-
-clean :: ByteString -> ByteString
-clean = stripw . B.filter isPrint
+	Right a	-> SM.Just a
+	Left _	-> SM.Nothing

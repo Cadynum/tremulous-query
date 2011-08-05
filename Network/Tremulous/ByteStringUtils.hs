@@ -1,22 +1,27 @@
 module Network.Tremulous.ByteStringUtils where
-import Prelude as P
-import Control.Applicative
-import Data.ByteString.Char8 as B
+import qualified Prelude as P
+import Prelude ((.), otherwise, not, ($))
+import Data.Int
+import Data.ByteString.Char8
 import Data.Char
+import Network.Tremulous.StrictMaybe
+
 
 stripPrefix :: ByteString -> ByteString -> Maybe ByteString
 stripPrefix p xs
-	| p `isPrefixOf` xs	= Just $ B.drop (B.length p) xs
+	| p `isPrefixOf` xs	= Just $ drop (length p) xs
 	| otherwise		= Nothing	
 
 maybeInt :: ByteString -> Maybe Int
-maybeInt x = fst <$> readInt x
+maybeInt x = case readInt x of
+	P.Nothing	-> Nothing
+	P.Just (a, _)	-> Just a
 
 splitlines :: ByteString -> [ByteString]
 splitlines = splitfilter '\n'
 
 stripw :: ByteString -> ByteString
-stripw = B.dropWhile isSpace
+stripw = dropWhile isSpace
 
 splitfilter :: Char -> ByteString -> [ByteString]
-splitfilter f = P.filter (not . B.null) . split f
+splitfilter f = P.filter (not . null) . split f

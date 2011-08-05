@@ -4,10 +4,11 @@ module Network.Tremulous.NameInsensitive (
 import Data.ByteString.Char8 as B
 import Data.Char
 import Data.Ord
+import Network.Tremulous.ByteStringUtils
 
 data TI = TI { 
-	  original :: !ByteString
-	, cleanedCase :: !ByteString
+	  original	:: !ByteString
+	, cleanedCase	:: !ByteString
 	}
 
 instance Eq TI where
@@ -23,14 +24,18 @@ unpackorig :: TI -> String
 unpackorig = B.unpack . original
 	
 mk :: ByteString -> TI
-mk bs = TI bs (B.map toLower bs)
+mk xs = TI bs (B.map toLower bs)
+	where bs = clean xs
 
 mkColor :: ByteString -> TI
-mkColor bs = TI bs (removeColors bs)
+mkColor xs = TI bs (removeColors bs)
+	where bs = clean xs
 
+clean :: ByteString -> ByteString
+clean = stripw . B.filter (\c -> c > '\x1F' && c < '\x80')
 
 removeColors :: ByteString -> ByteString
-removeColors = B.unfoldr f where
+removeColors bss = fst (B.unfoldrN (B.length bss) f bss) where
 	f bs = case B.uncons bs of
 		Nothing -> Nothing
 		Just (x, xs)

@@ -2,6 +2,8 @@ module Network.Tremulous.TupleReader (
 	TupleReader, tupleReader, require, requireWith, option
 ) where
 import Control.Monad.State.Strict
+import Network.Tremulous.StrictMaybe
+import Prelude (Eq(..), otherwise, ($))
 
 type TupleReader k v a = StateT [(k, v)] Maybe a
 

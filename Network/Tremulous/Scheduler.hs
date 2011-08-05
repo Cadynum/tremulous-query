@@ -3,6 +3,8 @@ module Network.Tremulous.Scheduler(
 	, newScheduler, addScheduled, addScheduledBatch
 	, addScheduledInstant, deleteScheduled
 ) where
+import Prelude hiding (Maybe(..))
+import Network.Tremulous.StrictMaybe
 import Control.Monad
 import Control.Concurrent
 import Control.Exception

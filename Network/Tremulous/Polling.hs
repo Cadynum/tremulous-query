@@ -1,7 +1,8 @@
 module Network.Tremulous.Polling (
 	pollMasters, pollOne
 ) where
-import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch)
+import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch, Maybe(..), maybe)
+import qualified Prelude as P
 
 import Control.Monad hiding (mapM_, sequence_)
 import Control.Concurrent
@@ -16,6 +17,7 @@ import qualified Data.Map as M
 import Data.String
 import Data.ByteString.Char8 (ByteString, append, pack)
 
+import Network.Tremulous.StrictMaybe
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Tremulous.Protocol
@@ -23,7 +25,7 @@ import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.MicroTime
 import Network.Tremulous.Scheduler
 
-data QType = QMaster !Int !Int | QGame !Int | QJustWait deriving Show
+data QType = QMaster !Int !Int | QGame !Int | QJustWait
 
 mtu :: Int
 mtu = 2048
@@ -100,8 +102,8 @@ pollMasters Delay{..} masterservers = do
 					-- This also serves as protection against
 					-- receiving responses for requests never sent
 					case start of
-						Nothing -> buildResponse
-						Just a	-> do
+						P.Nothing -> buildResponse
+						P.Just a -> do
 							let gameping = fromIntegral (now - a) `div` 1000
 							(x{ gameping } :) `liftM` buildResponse			
 			Just Invalid -> buildResponse
@@ -111,7 +113,7 @@ pollMasters Delay{..} masterservers = do
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
-	return $! PollResult xs (S.size t) (S.size m) t
+	return (PollResult xs (S.size t) (S.size m) t)
 		
 	where forceIO m f = catch (Just <$> f) $ \(_ :: IOError) -> do
 		b <- isEmptyMVar m 
