@@ -39,14 +39,14 @@ pollMasters :: Delay -> [MasterServer] -> IO PollResult
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
 	bindSocket sock (SockAddrInet 0 0)
-	
+
 	finished	<- newEmptyMVar
-	
+
 	-- server addresses recieved by master
 	mstate		<- newMVar S.empty
 	-- Servers that has responded
 	tstate		<- newMVar S.empty
-	
+
 	-- When first packet was sent to server (removed on proper response)
 	pingstate	<- newMVar (M.empty :: Map SockAddr MicroTime)
 
@@ -59,16 +59,16 @@ pollMasters Delay{..} masterservers = do
 			addScheduled sched $ if (n > 0)
 				then E (now + fromIntegral packetTimeout) host (QGame (n-1))
 				else E (now + fromIntegral packetTimeout) host QJustWait
-			
+
 		QMaster n proto	-> do
 			now <- getMicroTime
 			sendTo sock (getServers proto) host
 			addScheduled sched $ if (n > 0)
 				then E (now + fromIntegral packetTimeout `div` 2) host (QMaster (n-1) proto)
 				else E (now + fromIntegral packetTimeout) host QJustWait
-				
+
 		QJustWait -> return ()
-		
+
 	sched		<- newScheduler throughputDelay sf (Just (putMVar finished () >> sClose sock))
 	addScheduledInstant sched $
 		map (\MasterServer{..} -> (masterAddress, QMaster (packetDuplication*4) masterProtocol)) masterservers
@@ -84,7 +84,7 @@ pollMasters Delay{..} masterservers = do
 				let delta = S.difference x m
 				when (S.size delta > 0) $
 					addScheduledInstant sched $ map (,QGame packetDuplication) (S.toList delta)
-				
+
 				buildResponse
 
 			Just (Tremulous host x) -> do
@@ -105,18 +105,18 @@ pollMasters Delay{..} masterservers = do
 						P.Nothing -> buildResponse
 						P.Just a -> do
 							let gameping = fromIntegral (now - a) `div` 1000
-							(x{ gameping } :) `liftM` buildResponse			
+							(x{ gameping } :) `liftM` buildResponse
 			Just Invalid -> buildResponse
-			
+
 			Nothing -> return []
 
 	xs	<- buildResponse
 	m	<- takeMVar mstate
 	t	<- takeMVar tstate
 	return (PollResult xs (S.size t) (S.size m) t)
-		
+
 	where forceIO m f = catch (Just <$> f) $ \(_ :: IOError) -> do
-		b <- isEmptyMVar m 
+		b <- isEmptyMVar m
 		if b then forceIO m f else return Nothing
 
 data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
@@ -142,12 +142,12 @@ pollOne Delay{..} sockaddr = handle err $ bracket (socket AF_INET Datagram defau
 		else do
 			sClose sock
 			return Nothing
-		
+
 	start	<- getMicroTime
 	poll	<- ioMaybe $ recv sock mtu <* killThread pid
 	stop	<- getMicroTime
 	let gameping = fromIntegral (stop - start) `div` 1000
-	return $ (\x -> x {gameping}) <$> 
+	return $ (\x -> x {gameping}) <$>
 		(parseGameServer sockaddr =<< isProper =<< poll)
 	where
 	err (_ :: IOError) = return Nothing
@@ -155,13 +155,6 @@ pollOne Delay{..} sockaddr = handle err $ bracket (socket AF_INET Datagram defau
 
 ioMaybe :: IO a -> IO (Maybe a)
 ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
-
-
-putMVar' :: MVar a -> a -> IO ()
-putMVar' m a = a `seq` putMVar m a
-
-pureModifyMVar :: MVar a -> (a -> a) -> IO ()
-pureModifyMVar m f = putMVar' m . f =<< takeMVar m
 
 
 whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()

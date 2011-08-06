@@ -6,23 +6,23 @@ import Data.Char
 import Data.Ord
 import Network.Tremulous.ByteStringUtils
 
-data TI = TI { 
+data TI = TI {
 	  original	:: !ByteString
 	, cleanedCase	:: !ByteString
 	}
 
 instance Eq TI where
 	a == b = cleanedCase a == cleanedCase b
-	
+
 instance Ord TI where
 	compare = comparing cleanedCase
-	
+
 instance Show TI where
 	show = show . original
 
 unpackorig :: TI -> String
 unpackorig = B.unpack . original
-	
+
 mk :: ByteString -> TI
 mk xs = TI bs (B.map toLower bs)
 	where bs = clean xs

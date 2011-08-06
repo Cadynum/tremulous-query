@@ -24,11 +24,11 @@ elemByAddress :: SockAddr -> [GameServer] -> Bool
 elemByAddress add = any (\x -> add == address x)
 
 search :: String -> [GameServer] -> [(TI, GameServer)]
-search ""	= makePlayerNameList 
-search rawstr	= filter (\(a, _) -> str `B.isInfixOf` cleanedCase a ) . makePlayerNameList 
+search ""	= makePlayerNameList
+search rawstr	= filter (\(a, _) -> str `B.isInfixOf` cleanedCase a ) . makePlayerNameList
 	where
 	str	= B.pack $ map toLower rawstr
-	
+
 makePlayerNameList :: [GameServer] -> [(TI, GameServer)]
 makePlayerNameList = concatMap $ \x -> map (\a -> (name a, x)) (players x)
 

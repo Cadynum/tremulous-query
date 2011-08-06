@@ -11,12 +11,12 @@ import Control.Monad.State.Strict
 import Data.Attoparsec.Char8 hiding (option)
 import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
-import Network.Tremulous.StrictMaybe as SM
+import Network.Tremulous.StrictMaybe
 import Data.String
 import Data.Set (Set)
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
-import Network.Tremulous.SocketExtensions 
+import Network.Tremulous.SocketExtensions
 import Network.Tremulous.NameInsensitive
 import Network.Tremulous.TupleReader
 
@@ -30,19 +30,19 @@ data MasterServer = MasterServer {
 	   masterAddress	:: !SockAddr
 	 , masterProtocol	:: !Int
 	} deriving Eq
-	
+
 data GameServer = GameServer {
 	  address	:: !SockAddr
 	, gameping	:: !Int
 	, protocol	:: !Int
-	, gamemod	:: !(SM.Maybe TI)
+	, gamemod	:: !(Maybe TI)
 	, hostname	:: !TI
 	, mapname	:: !TI
 	, slots
 	, privslots	:: !Int
 	, protected	:: !Bool
 	, timelimit
-	, suddendeath	:: !(SM.Maybe Int)
+	, suddendeath	:: !(Maybe Int)
 	, unlagged	:: !Bool
 	, nplayers	:: !Int
 	, players	:: ![Player]
@@ -70,7 +70,7 @@ defaultDelay = Delay {
 	, packetDuplication	= 2
 	, throughputDelay	= 1 * 1000
 	}
-	
+
 -- Protocol version
 proto2string :: IsString s => Int ->  s
 proto2string x = case x of
@@ -94,25 +94,25 @@ parsePlayer team = parseMaybe $ do
 	skipSpace
 	name <- mkColor <$> quoted
 	return Player {..}
-	
+
 -- cvar P
 parseP :: ByteString -> [Team]
-parseP = foldr' f [] 
+parseP = foldr' f []
 	where
 	f '-' xs = xs
 	f  a  xs = readTeam a : xs
-	
+
 	readTeam x = case x of
 		'0'	-> Spectators
 		'1'	-> Aliens
 		'2'	-> Humans
 		_	-> Unknown
 
-parsePlayers :: ByteString -> [ByteString] -> SM.Maybe [Player]
+parsePlayers :: ByteString -> [ByteString] -> Maybe [Player]
 parsePlayers p = zipWithM parsePlayer (parseP p ++ repeat Unknown)
 
 parseCVars :: ByteString -> [(ByteString, ByteString)]
-parseCVars xs = f (splitfilter '\\' xs) where 
+parseCVars xs = f (splitfilter '\\' xs) where
 	f (k:v:cs)	= (k, v) : f cs
 	f _		= []
 
@@ -123,11 +123,11 @@ parseGameServer address xs = case splitlines xs of
 
 mkGameServer :: SockAddr -> [ByteString] -> [(ByteString, ByteString)] -> Maybe GameServer
 mkGameServer address rawplayers = tupleReader $ do
-	timelimit	<- option SM.Nothing maybeInt "timelimit"
+	timelimit	<- option Nothing maybeInt "timelimit"
 	hostname	<- mkColor <$> require "sv_hostname"
 	protocol	<- requireWith maybeInt "protocol"
 	mapname		<- option (TI "" "") (mk) "mapname"
-	gamemod		<- option SM.Nothing mkMod "gamename"
+	gamemod		<- option Nothing mkMod "gamename"
 	p		<- option "" id "P"
 	players		<- lift $ parsePlayers p rawplayers
 	protected	<- option False (/="0") "g_needpass"
@@ -135,16 +135,16 @@ mkGameServer address rawplayers = tupleReader $ do
 	slots		<- requireWith maybeInt "sv_maxclients"
 	suddendeath	<- option Nothing maybeInt "g_suddenDeathTime"
 	unlagged	<- option False (/="0") "g_unlagged"
-	
+
 	return GameServer { gameping = -1, nplayers = P.length players, .. }
 	where
-	mkMod "base"	= SM.Nothing
-	mkMod a		= SM.Just (mk a)
+	mkMod "base"	= Nothing
+	mkMod a		= Just (mk a)
 
 
-parseMasterServer :: ByteString -> [SockAddr]	
+parseMasterServer :: ByteString -> [SockAddr]
 parseMasterServer = fromMaybe [] . parseMaybe (many addr)
-	where	
+	where
 	wg = anyWord8
 	addr = do
 		char '\\'
@@ -158,7 +158,7 @@ parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 quoted :: Parser ByteString
 quoted = char '"' *> takeTill (=='"') <* char '"'
 
-parseMaybe :: Parser a -> ByteString -> SM.Maybe a
+parseMaybe :: Parser a -> ByteString -> Maybe a
 parseMaybe f xs = case parseOnly f xs of
-	Right a	-> SM.Just a
-	Left _	-> SM.Nothing
+	Right a	-> Just a
+	Left _	-> Nothing

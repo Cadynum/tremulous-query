@@ -29,8 +29,8 @@ putIPv4 (SockAddrInet (PortNum p) ip) = pack [i0, i1, i2, i3, p0, p1]
 	f :: Integral i => i -> Char
 	f = w2c . fromIntegral
 putIPv4 _ = empty
-	
-	
+
+
 (.<<.) :: Bits a => a -> Int -> a
 (.<<.) = shiftL
 
