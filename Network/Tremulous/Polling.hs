@@ -155,10 +155,3 @@ pollOne Delay{..} sockaddr = handle err $ bracket (socket AF_INET Datagram defau
 
 ioMaybe :: IO a -> IO (Maybe a)
 ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
-
-
-whileJust :: Monad m => a -> (a -> m (Maybe a)) -> m ()
-whileJust x f  = f x >>= \c -> case c of
-	Just a	-> whileJust a f
-	Nothing	-> return ()
-

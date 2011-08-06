@@ -35,13 +35,11 @@ clean :: ByteString -> ByteString
 clean = stripw . B.filter (\c -> c > '\x1F' && c < '\x80')
 
 removeColors :: ByteString -> ByteString
-removeColors bss = fst (B.unfoldrN (B.length bss) f bss) where
-	f bs = case B.uncons bs of
-		Nothing -> Nothing
-		Just (x, xs)
-			| x == '^'
-			, Just (x2, xs2) <- B.uncons xs
-			, isAlphaNum x2			-> f xs2
-			| otherwise			-> Just (toLower x, xs)
+removeColors bss = rebuildC (B.length bss) f bss where
+	f '^' xs | Just (x2, xs2) <- B.uncons xs
+		 , isAlphaNum x2
+		 , Just (x3, xs3) <- B.uncons xs2
+		 = f x3 xs3
+	f x xs = (toLower x, xs)
 
 

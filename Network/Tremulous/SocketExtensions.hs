@@ -5,7 +5,7 @@ import Network.Socket
 import Data.Word
 import Data.Bits
 import Data.ByteString.Char8
-import Data.ByteString.Internal
+import Data.ByteString as B
 
 deriving instance Ord SockAddr
 
@@ -18,7 +18,7 @@ getIPv4 i0 i1 i2 i3 p0 p1 = SockAddrInet (PortNum port) ip
 	f = fromIntegral
 
 putIPv4 :: SockAddr -> ByteString
-putIPv4 (SockAddrInet (PortNum p) ip) = pack [i0, i1, i2, i3, p0, p1]
+putIPv4 (SockAddrInet (PortNum p) ip) = B.pack [i0, i1, i2, i3, p0, p1]
 	where
 	i0 = f ip
 	i1 = f (ip .>>. 8)
@@ -26,8 +26,8 @@ putIPv4 (SockAddrInet (PortNum p) ip) = pack [i0, i1, i2, i3, p0, p1]
 	i3 = f (ip .>>. 24)
 	p0 = f p
 	p1 = f (p .>>. 8)
-	f :: Integral i => i -> Char
-	f = w2c . fromIntegral
+	f :: Integral i => i -> Word8
+	f = fromIntegral
 putIPv4 _ = empty
 
 
