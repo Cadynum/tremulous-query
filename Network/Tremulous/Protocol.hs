@@ -2,7 +2,6 @@ module Network.Tremulous.Protocol (
 	  module Network.Tremulous.NameInsensitive
 	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollResult(..)
 	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
-	, B.unpack
 ) where
 import Prelude as P hiding (Maybe(..))
 import Control.Applicative hiding (many)
@@ -150,8 +149,8 @@ parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 		char '\\'
 		a <- getIPv4 <$> wg <*> wg <*> wg <*> wg <*> wg <*> wg
 		case a of
-			SockAddrInet (PortNum 0) 0	-> addr
-			_				-> return a
+			SockAddrInet (PortNum p) i | p == 0 || i == 0	-> addr
+			_						-> return a
 
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 

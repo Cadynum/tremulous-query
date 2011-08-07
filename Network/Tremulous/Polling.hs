@@ -2,9 +2,9 @@ module Network.Tremulous.Polling (
 	pollMasters, pollOne
 ) where
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch, Maybe(..), maybe)
-import qualified Prelude as P
+import qualified Data.Maybe as P
 
-import Control.Monad hiding (mapM_, sequence_)
+import Control.Monad (when)
 import Control.Concurrent
 import Control.Applicative
 import Control.Exception
@@ -105,7 +105,7 @@ pollMasters Delay{..} masterservers = do
 						P.Nothing -> buildResponse
 						P.Just a -> do
 							let gameping = fromIntegral (now - a) `div` 1000
-							(x{ gameping } :) `liftM` buildResponse
+							(x{ gameping } :) <$> buildResponse
 			Just Invalid -> buildResponse
 
 			Nothing -> return []

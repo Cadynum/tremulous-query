@@ -1,7 +1,8 @@
 module Network.Tremulous.NameInsensitive (
-	TI(..), mk, mkColor, unpackorig
+	TI(..), mk, mkColor, mkAlphaNum
 ) where
-import Data.ByteString.Char8 as B
+import Prelude hiding (length, map, filter)
+import Data.ByteString.Char8
 import Data.Char
 import Data.Ord
 import Network.Tremulous.ByteStringUtils
@@ -20,25 +21,26 @@ instance Ord TI where
 instance Show TI where
 	show = show . original
 
-unpackorig :: TI -> String
-unpackorig = B.unpack . original
-
 mk :: ByteString -> TI
-mk xs = TI bs (B.map toLower bs)
+mk xs = TI bs (map toLower bs)
 	where bs = clean xs
 
 mkColor :: ByteString -> TI
 mkColor xs = TI bs (removeColors bs)
 	where bs = clean xs
 
+mkAlphaNum :: ByteString -> TI
+mkAlphaNum xs = TI bs (map toLower bs)
+	where bs = stripw (filter isAlphaNum xs)
+
 clean :: ByteString -> ByteString
-clean = stripw . B.filter (\c -> c > '\x1F' && c < '\x80')
+clean = stripw . filter (\c -> c > '\x1F' && c < '\x80')
 
 removeColors :: ByteString -> ByteString
-removeColors bss = rebuildC (B.length bss) f bss where
-	f '^' xs | Just (x2, xs2) <- B.uncons xs
+removeColors bss = rebuildC (length bss) f bss where
+	f '^' xs | Just (x2, xs2) <- uncons xs
 		 , isAlphaNum x2
-		 , Just (x3, xs3) <- B.uncons xs2
+		 , Just (x3, xs3) <- uncons xs2
 		 = f x3 xs3
 	f x xs = (toLower x, xs)
 
