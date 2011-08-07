@@ -1,7 +1,7 @@
 module Network.Tremulous.Polling (
 	pollMasters, pollOne
 ) where
-import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch, Maybe(..), maybe)
+import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap, catch, Maybe(..), maybe, foldr)
 import qualified Data.Maybe as P
 
 import Control.Monad (when)
@@ -10,8 +10,6 @@ import Control.Applicative
 import Control.Exception
 
 import Data.Foldable
-import Data.Set (Set)
-import qualified Data.Set as S
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.String
@@ -26,6 +24,7 @@ import Network.Tremulous.MicroTime
 import Network.Tremulous.Scheduler
 
 data QType = QMaster !Int !Int | QGame !Int | QJustWait
+data State = Pending | Requested !MicroTime | Responded
 
 mtu :: Int
 mtu = 2048
@@ -35,6 +34,7 @@ getStatus = "\xFF\xFF\xFF\xFFgetstatus"
 getServers :: Int -> ByteString
 getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
 
+
 pollMasters :: Delay -> [MasterServer] -> IO PollResult
 pollMasters Delay{..} masterservers = do
 	sock		<- socket AF_INET Datagram defaultProtocol
@@ -42,19 +42,15 @@ pollMasters Delay{..} masterservers = do
 
 	finished	<- newEmptyMVar
 
-	-- server addresses recieved by master
-	mstate		<- newMVar S.empty
-	-- Servers that has responded
-	tstate		<- newMVar S.empty
-
-	-- When first packet was sent to server (removed on proper response)
-	pingstate	<- newMVar (M.empty :: Map SockAddr MicroTime)
+	state		<- newMVar (M.empty :: Map SockAddr State)
 
 	let sf sched host qtype = case qtype of
 		QGame n -> do
 			now <- getMicroTime
+			-- The first packet sent, which is why it's okey to just insert and replace
+			-- the current Pending value
 			when (n == packetDuplication) $
-				pureModifyMVar pingstate $ M.insert host now
+				pureModifyMVar state $ M.insert host (Requested now)
 			sendTo sock getStatus host
 			addScheduled sched $ if (n > 0)
 				then E (now + fromIntegral packetTimeout) host (QGame (n-1))
@@ -77,49 +73,46 @@ pollMasters Delay{..} masterservers = do
 		packet <- forceIO finished $ recvFrom sock mtu
 		case parsePacket (map masterAddress masterservers) <$> packet of
 			-- The master responded, great! Now lets send requests to the new servers
-			Just (Master host x) -> do
+			Just (Master host xs) -> do
 				deleteScheduled sched host
-				m <- takeMVar mstate
-				putMVar' mstate (S.union m x)
-				let delta = S.difference x m
-				when (S.size delta > 0) $
-					addScheduledInstant sched $ map (,QGame packetDuplication) (S.toList delta)
+				s <- takeMVar state
+				let (s', delta) = foldr masterRoll (s, []) xs
+				addScheduledInstant sched $ map (,QGame packetDuplication) delta
+				putMVar' state s'
 
 				buildResponse
 
 			Just (Tremulous host x) -> do
 				now <- getMicroTime
-				t <- takeMVar tstate
-				if S.member host t then do
-					putMVar' tstate t
-					buildResponse
-				else do
-					deleteScheduled sched host
-					ps	<- takeMVar pingstate
-					start	<- return $! M.lookup host ps
-					putMVar' pingstate $ M.delete host ps
-					putMVar' tstate $ S.insert host t
-					-- This also serves as protection against
-					-- receiving responses for requests never sent
-					case start of
-						P.Nothing -> buildResponse
-						P.Just a -> do
-							let gameping = fromIntegral (now - a) `div` 1000
-							(x{ gameping } :) <$> buildResponse
+				s <- takeMVar state
+				case M.lookup host s of
+					P.Just (Requested start) -> do
+						deleteScheduled sched host
+						putMVar' state $ M.insert host Responded s
+						let gameping = fromIntegral (now - start) `div` 1000
+						(x{ gameping } :) <$> buildResponse
+					_ -> do
+						putMVar' state s
+						buildResponse
 			Just Invalid -> buildResponse
 
 			Nothing -> return []
 
 	xs	<- buildResponse
-	m	<- takeMVar mstate
-	t	<- takeMVar tstate
-	return (PollResult xs (S.size t) (S.size m) t)
+	s	<- takeMVar state
+	let (nResp, nNot) = ssum s
+	return (PollResult xs nResp (nResp+nNot))
 
-	where forceIO m f = catch (Just <$> f) $ \(_ :: IOError) -> do
+	where
+	forceIO m f = catch (Just <$> f) $ \(_ :: IOError) -> do
 		b <- isEmptyMVar m
 		if b then forceIO m f else return Nothing
-
-data Packet = Master !SockAddr !(Set SockAddr) | Tremulous !SockAddr !GameServer | Invalid
+	masterRoll host ~(!m, xs) | M.member host m = (m, xs)
+			          | otherwise       = (M.insert host Pending m, host:xs)
+	ssum = foldl' f (0, 0) where
+		f (!a, !b) Responded = (a+1, b)
+		f (!a, !b) _         = (a, b+1)
+data Packet = Master !SockAddr ![SockAddr] | Tremulous !SockAddr !GameServer | Invalid
 
 parsePacket :: [SockAddr] -> (ByteString, SockAddr) -> Packet
 parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" content of
@@ -127,7 +120,7 @@ parsePacket masters (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" cont
 		| Just x <- parseMaster a, host `elem` masters	-> Master host x
 	_							-> Invalid
 	where
-	parseMaster x = S.fromList . parseMasterServer <$> stripPrefix "getserversResponse" x
+	parseMaster x = parseMasterServer <$> stripPrefix "getserversResponse" x
 	parseServer x = parseGameServer host =<< stripPrefix "statusResponse" x
 
 

@@ -12,7 +12,6 @@ import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 import Network.Tremulous.StrictMaybe
 import Data.String
-import Data.Set (Set)
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.SocketExtensions
@@ -60,7 +59,7 @@ data PollResult = PollResult {
 	  polled		:: ![GameServer]
 	, serversResponded
 	, serversRequested	:: !Int
-	, respondedCache	:: !(Set SockAddr)
+	--, respondedCache	:: !(Set SockAddr)
 	}
 
 defaultDelay :: Delay
