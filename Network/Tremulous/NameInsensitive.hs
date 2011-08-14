@@ -30,8 +30,8 @@ mkColor xs = TI bs (removeColors bs)
 	where bs = clean xs
 
 mkAlphaNum :: ByteString -> TI
-mkAlphaNum xs = TI bs (map toLower bs)
-	where bs = stripw (filter isAlphaNum xs)
+mkAlphaNum xs = TI bs (map toLower $ filter (\x -> isAlphaNum x || isSpace x) bs)
+	where bs = clean xs
 
 clean :: ByteString -> ByteString
 clean = stripw . filter (\c -> c > '\x1F' && c < '\x80')

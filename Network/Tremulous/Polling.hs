@@ -112,6 +112,7 @@ pollMasters Delay{..} masterservers = do
 	ssum = foldl' f (0, 0) where
 		f (!a, !b) Responded = (a+1, b)
 		f (!a, !b) _         = (a, b+1)
+
 data Packet = Master !SockAddr ![SockAddr] | Tremulous !SockAddr !GameServer | Invalid
 
 parsePacket :: [SockAddr] -> (ByteString, SockAddr) -> Packet
