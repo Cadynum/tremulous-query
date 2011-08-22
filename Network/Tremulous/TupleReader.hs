@@ -1,5 +1,5 @@
 module Network.Tremulous.TupleReader (
-	TupleReader, tupleReader, require, requireWith, option
+	TupleReader, tupleReader, require, requireWith, option, optionWith
 ) where
 import Control.Monad.State.Strict
 import Network.Tremulous.StrictMaybe
@@ -25,10 +25,13 @@ requireWith f key = do
 	e <- with key
 	lift $ f =<< e
 
-option :: Eq k => a -> (v -> a) -> k -> TupleReader k v a
-option def f key = maybe def f `fmap` with key
+optionWith :: Eq k => (v -> Maybe a) -> k -> TupleReader k v (Maybe a)
+optionWith f key = do
+	e <- with key
+	return (f =<< e)
 
-with :: Eq k => k -> TupleReader k v (Maybe v)
+with, option :: Eq k => k -> TupleReader k v (Maybe v)
+option = with
 with key = do
 	s <- get
 	let (e, s') = lookupDelete key s

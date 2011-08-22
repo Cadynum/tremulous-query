@@ -34,7 +34,7 @@ mkAlphaNum xs = TI bs (map toLower $ filter (\x -> isAlphaNum x || isSpace x) bs
 	where bs = clean xs
 
 clean :: ByteString -> ByteString
-clean = stripw . filter (\c -> c > '\x1F' && c < '\x80')
+clean = stripw . filter (\c -> c >= '\x20' && c <= '\x7E')
 
 removeColors :: ByteString -> ByteString
 removeColors bss = rebuildC (length bss) f bss where

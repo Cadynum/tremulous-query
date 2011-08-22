@@ -3,7 +3,7 @@ module Network.Tremulous.Protocol (
 	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollResult(..)
 	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
 ) where
-import Prelude as P hiding (Maybe(..))
+import Prelude as P hiding (Maybe(..), maybe)
 import Control.Applicative hiding (many)
 import Control.Monad.State.Strict
 
@@ -12,6 +12,8 @@ import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 import Network.Tremulous.StrictMaybe
 import Data.String
+import Data.Bits
+import Data.Word
 import Network.Socket
 import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.SocketExtensions
@@ -31,17 +33,19 @@ data MasterServer = MasterServer {
 
 data GameServer = GameServer {
 	  address	:: !SockAddr
-	, gameping	:: !Int
+	, gameping
 	, protocol	:: !Int
-	, gamemod	:: !(Maybe TI)
 	, hostname	:: !TI
-	, mapname	:: !TI
-	, slots
-	, privslots	:: !Int
-	, protected	:: !Bool
+	, gamemod
+	, version
+	, mapname	:: !(Maybe TI)
+	, slots		:: !Int
+	, privslots	:: !(Maybe Int)
+	, protected
+	, unlagged	:: !Bool
 	, timelimit
 	, suddendeath	:: !(Maybe Int)
-	, unlagged	:: !Bool
+
 	, nplayers	:: !Int
 	, players	:: ![Player]
 	}
@@ -59,7 +63,6 @@ data PollResult = PollResult {
 	  polled		:: ![GameServer]
 	, serversResponded
 	, serversRequested	:: !Int
-	--, respondedCache	:: !(Set SockAddr)
 	}
 
 defaultDelay :: Delay
@@ -106,8 +109,9 @@ parseP = foldr' f []
 		'2'	-> Humans
 		_	-> Unknown
 
-parsePlayers :: ByteString -> [ByteString] -> Maybe [Player]
-parsePlayers p = zipWithM parsePlayer (parseP p ++ repeat Unknown)
+parsePlayers :: (Maybe ByteString) -> [ByteString] -> Maybe [Player]
+parsePlayers Nothing  xs = mapM (parsePlayer Unknown) xs
+parsePlayers (Just p) xs = zipWithM parsePlayer (parseP p ++ repeat Unknown) xs
 
 parseCVars :: ByteString -> [(ByteString, ByteString)]
 parseCVars xs = f (splitfilter '\\' xs) where
@@ -121,18 +125,19 @@ parseGameServer address xs = case splitlines xs of
 
 mkGameServer :: SockAddr -> [ByteString] -> [(ByteString, ByteString)] -> Maybe GameServer
 mkGameServer address rawplayers = tupleReader $ do
-	timelimit	<- option Nothing maybeInt "timelimit"
-	hostname	<- mkColor <$> require "sv_hostname"
-	protocol	<- requireWith maybeInt "protocol"
-	mapname		<- option (TI "" "") (mk) "mapname"
-	gamemod		<- option Nothing mkMod "gamename"
-	p		<- option "" id "P"
+	timelimit	<- optionWith maybeInt		"timelimit"
+	hostname	<- mkColor <$> require		"sv_hostname"
+	protocol	<- requireWith maybeInt		"protocol"
+	mapname		<- optionWith (Just . mk)	"mapname"
+	version		<- optionWith (Just . mk)	"version"
+	gamemod		<- optionWith mkMod		"gamename"
+	p		<- option		"P"
 	players		<- lift $ parsePlayers p rawplayers
-	protected	<- option False (/="0") "g_needpass"
-	privslots	<- option 0 (fromMaybe 0 . maybeInt) "sv_privateClients"
-	slots		<- requireWith maybeInt "sv_maxclients"
-	suddendeath	<- option Nothing maybeInt "g_suddenDeathTime"
-	unlagged	<- option False (/="0") "g_unlagged"
+	protected	<- maybe False (/="0") <$> option "g_needpass"
+	privslots	<- optionWith maybeInt "sv_privateClients"
+	slots		<- maybe id subtract privslots <$> requireWith maybeInt "sv_maxclients"
+	suddendeath	<- optionWith maybeInt "g_suddenDeathTime"
+	unlagged	<- maybe False (/="0") <$> option "g_unlagged"
 
 	return GameServer { gameping = -1, nplayers = P.length players, .. }
 	where
@@ -144,12 +149,21 @@ parseMasterServer :: ByteString -> [SockAddr]
 parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 	where
 	wg = anyWord8
+	f :: (Integral a, Integral b) => a -> b
+	f = fromIntegral
 	addr = do
 		char '\\'
-		a <- getIPv4 <$> wg <*> wg <*> wg <*> wg <*> wg <*> wg
-		case a of
-			SockAddrInet (PortNum p) i | p == 0 || i == 0	-> addr
-			_						-> return a
+		i3 <- wg
+		i2 <- wg
+		i1 <- wg
+		i0 <- wg
+		p1 <- wg
+		p0 <- wg
+		let ip   = (f i3 .<<. 24) .|. (f i2 .<<. 16) .|. (f i1 .<<. 8) .|. f i0 :: Word32
+		    port = (f p1 .<<. 8) .|. f p0 :: Word16
+		if port == 0 || ip == 0
+			then addr
+			else return $ SockAddrInet (PortNum (htons port)) (htonl ip)
 
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 

@@ -33,7 +33,7 @@ Library
                         Network.Tremulous.StrictMaybe
                         Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.3 && < 5, network, containers, bytestring, attoparsec, mtl
+  Build-Depends:        base>=4.3 && < 5, network, containers, bytestring, attoparsec, mtl, deepseq
   if os(windows)
       Build-Depends:    Win32
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields
