@@ -164,7 +164,8 @@ parseMasterServer = fromMaybe [] . parseMaybe (many addr)
 		if port == 0 || ip == 0
 			then addr
 			else return $ SockAddrInet (PortNum (htons port)) (htonl ip)
-
+(.<<.) :: Bits a => a -> Int -> a
+(.<<.) = shiftL
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
 quoted :: Parser ByteString

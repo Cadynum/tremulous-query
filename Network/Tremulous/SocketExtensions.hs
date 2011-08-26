@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP, StandaloneDeriving #-}
 module Network.Tremulous.SocketExtensions where
 import Prelude as P
-import Control.DeepSeq
 import Foreign
+import Control.DeepSeq
 import Network.Socket
 
 deriving instance Ord SockAddr
@@ -14,11 +14,13 @@ instance NFData SockAddr where
 	rnf (SockAddrUnix a) = rnf a
 #endif
 
-foreign import ccall unsafe "ntohl" ntohl :: Word32 -> Word32
-foreign import ccall unsafe "htonl" htonl :: Word32 -> Word32
-foreign import ccall unsafe "ntohs" ntohs :: Word16 -> Word16
-foreign import ccall unsafe "htons" htons :: Word16 -> Word16
+#if defined(mingw32_HOST_OS) || defined(__MINGW32__)
+#define CALLCONV stdcall
+#else
+#define CALLCONV ccall
+#endif
 
-(.<<.), (.>>.) :: Bits a => a -> Int -> a
-(.<<.) = shiftL
-(.>>.) = shiftR
+foreign import CALLCONV unsafe "ntohl" ntohl :: Word32 -> Word32
+foreign import CALLCONV unsafe "htonl" htonl :: Word32 -> Word32
+foreign import CALLCONV unsafe "ntohs" ntohs :: Word16 -> Word16
+foreign import CALLCONV unsafe "htons" htons :: Word16 -> Word16
