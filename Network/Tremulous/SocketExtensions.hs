@@ -2,8 +2,7 @@
 module Network.Tremulous.SocketExtensions where
 import Prelude as P
 import Control.DeepSeq
-import Data.Word
-import Data.Bits
+import Foreign
 import Network.Socket
 
 deriving instance Ord SockAddr
