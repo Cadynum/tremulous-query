@@ -1,6 +1,4 @@
-module Network.Tremulous.TupleReader (
-	TupleReader, tupleReader, require, requireWith, option, optionWith
-) where
+module Network.Tremulous.TupleReader where
 import Control.Monad.State.Strict
 import Network.Tremulous.StrictMaybe
 import Prelude (Eq(..), otherwise, ($))
