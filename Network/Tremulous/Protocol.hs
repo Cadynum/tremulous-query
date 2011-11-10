@@ -24,7 +24,7 @@ data Delay = Delay {
 	  packetTimeout
 	, packetDuplication
 	, throughputDelay	:: !Int
-	} deriving (Show, Read)
+	}
 
 data MasterServer = MasterServer {
 	   masterAddress	:: !SockAddr

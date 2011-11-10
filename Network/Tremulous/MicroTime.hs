@@ -16,7 +16,7 @@ getMicroTime :: IO MicroTime
 #ifdef mingw32_HOST_OS
 getMicroTime = do
 	FILETIME ft <- System.Win32.Time.getSystemTimeAsFileTime
-	return ((ft - win32_epoch_adjust) `div` 10)
+	return ((ft - win32_epoch_adjust) `quot` 10)
 
 win32_epoch_adjust :: Word64
 win32_epoch_adjust = 116444736000000000
