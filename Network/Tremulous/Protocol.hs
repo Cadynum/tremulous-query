@@ -4,7 +4,7 @@ module Network.Tremulous.Protocol (
 	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
 ) where
 import Prelude as P hiding (Maybe(..), maybe)
-import Control.Applicative hiding (many)
+import Control.Applicative
 import Control.Monad.State.Strict
 
 import Data.Attoparsec.Char8 hiding (option)
