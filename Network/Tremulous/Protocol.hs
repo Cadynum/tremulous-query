@@ -4,7 +4,7 @@ module Network.Tremulous.Protocol (
 	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
 ) where
 import Prelude as P hiding (Maybe(..), maybe)
-import Control.Applicative
+import Control.Applicative as A
 import Control.Monad.State.Strict
 
 import Data.Attoparsec.Char8 hiding (option)
@@ -146,7 +146,7 @@ mkGameServer address rawplayers = tupleReader $ do
 
 
 parseMasterServer :: ByteString -> [SockAddr]
-parseMasterServer = fromMaybe [] . parseMaybe (many addr)
+parseMasterServer = fromMaybe [] . parseMaybe (A.many addr)
 	where
 	wg = anyWord8
 	f :: (Integral a, Integral b) => a -> b
