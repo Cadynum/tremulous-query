@@ -1,5 +1,5 @@
 Name:			tremulous-query
-Version:		1.0.5
+Version:		1.0.6
 Author:			Christoffer Öjeling
 Maintainer:		Christoffer Öjeling <christoffer@ojeling.net>
 License:		GPL-3
@@ -11,7 +11,7 @@ Description:		A library for polling servers from the game Tremulous.
 
 Cabal-Version:		>= 1.10
 Build-Type:		Simple
-Tested-With:            GHC==7.0.3
+Tested-With:            GHC==7.4.1
 
 Source-Repository head
   Type:                 git
@@ -33,7 +33,7 @@ Library
                         Network.Tremulous.StrictMaybe
                         Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.3 && < 5, network, containers, bytestring, attoparsec>=0.9, mtl, deepseq
+  Build-Depends:        base>=4.5 && < 5, network, containers, bytestring, attoparsec>=0.9, mtl, deepseq
   if os(windows)
       Build-Depends:    Win32
   Ghc-Options:          -Wall -fno-warn-unused-do-bind -fno-warn-orphans -funbox-strict-fields

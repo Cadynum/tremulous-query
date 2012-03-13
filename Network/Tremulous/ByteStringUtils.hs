@@ -6,6 +6,7 @@ import Data.Char
 import Network.Tremulous.StrictMaybe
 import Data.ByteString.Internal
 import Foreign
+import System.IO.Unsafe as U
 
 stripPrefix :: ByteString -> ByteString -> Maybe ByteString
 stripPrefix p xs
@@ -30,7 +31,7 @@ splitfilter f = P.filter (not . null) . split f
 rebuild :: Int -> (Word8 -> ByteString -> (Word8, ByteString)) -> ByteString -> ByteString
 rebuild i f x0
 	| i < 0     = empty
-	| otherwise = unsafePerformIO $ createAndTrim i $ \p -> go p x0 0
+	| otherwise = U.unsafePerformIO $ createAndTrim i $ \p -> go p x0 0
 	where
         go !p !(PS x s l) !n
 		| l == 0 || n == i = return n

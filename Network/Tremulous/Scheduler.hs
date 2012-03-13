@@ -67,7 +67,7 @@ newScheduler throughput func finalizer = do
 					else do
 						putMVar' queue q
 						tryTakeMVar sync
-						syncid <- forkIOUnmasked $ takeMVar sync >> throwTo tid Interrupt
+						syncid <- forkIO $ restore $ takeMVar sync >> throwTo tid Interrupt
 						let wait = fromIntegral (time - now)
 						waited <- falseOnInterrupt $ restore $ threadDelay wait
 						when waited $ do
