@@ -1,7 +1,7 @@
 module Network.Tremulous.Protocol (
 	  module Network.Tremulous.NameInsensitive
 	, Delay(..), Team(..),  GameServer(..), Player(..), MasterServer(..), PollResult(..)
-	, defaultDelay, parseGameServer, proto2string, string2proto, parseMasterServer
+	, defaultDelay, parseGameServer, parseMasterServer
 ) where
 import Prelude as P hiding (Maybe(..), maybe)
 import Control.Applicative as A
@@ -11,7 +11,6 @@ import Data.Attoparsec.Char8 hiding (option)
 import Data.Attoparsec (anyWord8)
 import Data.ByteString.Char8 as B
 import Network.Tremulous.StrictMaybe
-import Data.String
 import Data.Bits
 import Data.Word
 import Network.Socket
@@ -45,7 +44,7 @@ data GameServer = GameServer {
 	, unlagged	:: !Bool
 	, timelimit
 	, suddendeath	:: !(Maybe Int)
-
+	-- nplayers excluding bots. A player is a bot if ping == 0
 	, nplayers	:: !Int
 	, players	:: ![Player]
 	}
@@ -72,21 +71,6 @@ defaultDelay = Delay {
 	, throughputDelay	= 1 * 1000
 	}
 
--- Protocol version
-proto2string :: IsString s => Int ->  s
-proto2string x = case x of
-	69 -> "1.1"
-	70 -> "gpp"
-	_  -> "?"
-
-string2proto :: (IsString s, Eq s) => s -> Maybe Int
-string2proto x = case x of
-	"vanilla"	-> Just 69
-	"1.1"		-> Just 69
-	"gpp"		-> Just 70
-	"1.2"		-> Just 70
-	_		-> Nothing
-
 parsePlayer :: Team -> ByteString -> Maybe Player
 parsePlayer team = parseMaybe $ do
 	kills <- signed decimal
@@ -109,7 +93,7 @@ parseP = foldr' f []
 		'2'	-> Humans
 		_	-> Unknown
 
-parsePlayers :: (Maybe ByteString) -> [ByteString] -> Maybe [Player]
+parsePlayers :: Maybe ByteString -> [ByteString] -> Maybe [Player]
 parsePlayers Nothing  xs = mapM (parsePlayer Unknown) xs
 parsePlayers (Just p) xs = zipWithM parsePlayer (parseP p ++ repeat Unknown) xs
 
@@ -139,7 +123,9 @@ mkGameServer address rawplayers = tupleReader $ do
 	suddendeath	<- optionWith maybeInt "g_suddenDeathTime"
 	unlagged	<- maybe False (/="0") <$> option "g_unlagged"
 
-	return GameServer { gameping = -1, nplayers = P.length players, .. }
+	return GameServer { gameping = -1
+		, nplayers = P.length $ P.filter (\x -> ping x > 0) players
+		, .. }
 	where
 	mkMod "base"	= Nothing
 	mkMod a		= Just (mk a)
@@ -148,24 +134,35 @@ mkGameServer address rawplayers = tupleReader $ do
 parseMasterServer :: ByteString -> [SockAddr]
 parseMasterServer = fromMaybe [] . parseMaybe (A.many addr)
 	where
-	wg = anyWord8
-	f :: (Integral a, Integral b) => a -> b
-	f = fromIntegral
 	addr = do
 		char '\\'
-		i3 <- wg
-		i2 <- wg
-		i1 <- wg
-		i0 <- wg
-		p1 <- wg
-		p0 <- wg
-		let ip   = (f i3 .<<. 24) .|. (f i2 .<<. 16) .|. (f i1 .<<. 8) .|. f i0 :: Word32
-		    port = (f p1 .<<. 8) .|. f p0 :: Word16
+		ip <- parseUInt32N
+		port <- parseUInt16N
 		if port == 0 || ip == 0
 			then addr
 			else return $ SockAddrInet (PortNum (htons port)) (htonl ip)
-(.<<.) :: Bits a => a -> Int -> a
-(.<<.) = shiftL
+
+parseUInt32N :: Parser Word32
+parseUInt32N = do
+	b3 <- wg
+	b2 <- wg
+	b1 <- wg
+	b0 <- wg
+	return $ (b3 << 24) .|. (b2 << 16) .|. (b1 << 8) .|. b0
+	where
+	wg = fromIntegral <$> anyWord8
+	(<<) = unsafeShiftL
+
+parseUInt16N :: Parser Word16
+parseUInt16N = do
+	b1 <- wg
+	b0 <- wg
+	return $ (b1 << 8) .|. b0
+	where
+	wg = fromIntegral <$> anyWord8
+	(<<) = unsafeShiftL
+
+
 -- /// Attoparsec utils ////////////////////////////////////////////////////////////////////////////
 
 quoted :: Parser ByteString

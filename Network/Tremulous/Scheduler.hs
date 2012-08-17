@@ -44,11 +44,9 @@ newScheduler throughput func finalizer = do
 		let loop = do
 			q <- takeMVar queue
 			case q of
-				[] -> putMVar' queue q >> case finalizer of
-					Nothing -> do
-						takeMVar sync
-						loop
-					Just a -> a
+				[] -> do
+					putMVar' queue q
+					fromMaybe (takeMVar sync >> loop) finalizer
 
 				E{time=0, ..} : qs -> do
 					putMVar' queue qs
@@ -80,7 +78,7 @@ newScheduler throughput func finalizer = do
 			in loop
 
 signal :: MVar () -> IO ()
-signal a = tryPutMVar a () >> return ()
+signal a = void $ tryPutMVar a ()
 
 addScheduled :: Scheduler id a -> Event id a -> IO ()
 addScheduled Scheduler{..} event = do
@@ -94,7 +92,7 @@ addScheduledBatch Scheduler{..} events = do
 
 addScheduledInstant :: Scheduler id a -> [(id, a)] -> IO ()
 addScheduledInstant Scheduler{..} events = do
-	pureModifyMVar queue $ \q -> (map (uncurry (E 0)) events) ++ q
+	pureModifyMVar queue $ \q -> map (uncurry (E 0)) events ++ q
 	signal sync
 
 deleteScheduled :: Scheduler id a -> id -> IO ()

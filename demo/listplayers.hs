@@ -16,10 +16,13 @@ main :: IO ()
 main = withSocketsDo $ do
 	host	<- getDNS "master.tremulous.net" "30710"
 	host2	<- getDNS "master.tremulous.net" "30700"
-	host3	<- getDNS "master.urbanterror.net" "27950"
+	--host3	<- getDNS "master.urbanterror.net" "27950"
+	host3	<- getDNS "unvanquished.net" "27950"
+
 	PollResult{..}	<- pollMasters defaultDelay
 		[MasterServer host 69, MasterServer host2 70
-		, MasterServer host3 68]
+		--, MasterServer host3 68
+		, MasterServer host3 86]
 	printf "%d servers responded out of %d\n" serversResponded serversRequested
 	let plist = concatMap players polled
 	mapM_ (B.putStrLn . original . name)  plist

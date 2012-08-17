@@ -25,7 +25,7 @@ win32_epoch_adjust = 116444736000000000
 data CTimeval = MkCTimeval !CLong !CLong
 
 instance Storable CTimeval where
-	sizeOf _	= (sizeOf (undefined :: CLong)) * 2
+	sizeOf _	= sizeOf (undefined :: CLong) * 2
 	alignment _	= alignment (undefined :: CLong)
 	peek p = do
 		s   <- peekElemOff (castPtr p) 0
@@ -40,8 +40,8 @@ foreign import ccall unsafe "time.h gettimeofday" gettimeofday :: Ptr CTimeval -
 -- | Get the current POSIX time from the system clock.
 getMicroTime = with (MkCTimeval 0 0) $ \ptval -> do
 	result <- gettimeofday ptval nullPtr
-	if (result == 0)
+	if result == 0
 		then f `fmap` peek ptval
-		else fail ("error in gettimeofday: " ++ (show result))
+		else fail ("error in gettimeofday: " ++ show result)
 	where f (MkCTimeval a b) = fromIntegral a * 1000000 + fromIntegral b
 #endif

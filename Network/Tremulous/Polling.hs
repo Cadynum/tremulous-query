@@ -13,7 +13,8 @@ import Data.Foldable
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.String
-import Data.ByteString.Char8 (ByteString, append, pack)
+import Data.ByteString.Char8 (ByteString, append, pack, concat)
+import qualified Data.ByteString.Char8 as B
 
 import Network.Tremulous.StrictMaybe
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
@@ -25,14 +26,18 @@ import Network.Tremulous.Scheduler
 
 data QType = QMaster !Int !Int | QGame !Int | QJustWait
 data State = Pending MasterServer | Requested !MicroTime MasterServer | Responded | Broken
+	deriving Eq
+
+data Packet = Master !SockAddr ![SockAddr] | Tremulous !SockAddr !GameServer | Invalid
 
 mtu :: Int
 mtu = 2048
 
 getStatus :: IsString s => s
 getStatus = "\xFF\xFF\xFF\xFFgetstatus"
+
 getServers :: Int -> ByteString
-getServers proto = "\xFF\xFF\xFF\xFFgetservers " `append` pack (show proto) `append` " empty full"
+getServers proto = B.concat ["\xFF\xFF\xFF\xFFgetservers ", pack (show proto), " empty full"]
 
 
 pollMasters :: Delay -> [MasterServer] -> IO PollResult
@@ -55,20 +60,20 @@ pollMasters Delay{..} masterservers = do
 					_          -> P.Nothing)
 					host
 			sendTo sock getStatus host
-			addScheduled sched $ if (n > 0)
+			addScheduled sched $ if n > 0
 				then E (now + fromIntegral packetTimeout) host (QGame (n-1))
 				else E (now + fromIntegral packetTimeout) host QJustWait
 
 		QMaster n proto	-> do
 			now <- getMicroTime
 			sendTo sock (getServers proto) host
-			addScheduled sched $ if (n > 0)
+			addScheduled sched $ if n > 0
 				then E (now + fromIntegral packetTimeout `quot` 2) host (QMaster (n-1) proto)
 				else E (now + fromIntegral packetTimeout) host QJustWait
 
 		QJustWait -> return ()
 
-	sched		<- newScheduler throughputDelay sf (Just (putMVar finished () >> sClose sock))
+	sched <- newScheduler throughputDelay sf (Just (putMVar finished () >> sClose sock))
 	addScheduledInstant sched $
 		map (\MasterServer{..} -> (masterAddress, QMaster (packetDuplication*4) masterProtocol)) masterservers
 
@@ -95,9 +100,9 @@ pollMasters Delay{..} masterservers = do
 						deleteScheduled sched host
 						-- This one is for you, devhc
 						if protocol x == masterProtocol then do
-							let gameping = fromIntegral (now - start) `quot` 1000
+							let x' = x{ gameping = fromIntegral (now - start) `quot` 1000 }
 							putMVar' state $ M.insert host Responded s
-							(x{ gameping } :) <$> buildResponse
+							(x':) <$> buildResponse
 						else do
 							putMVar' state $ M.insert host Broken s
 							buildResponse
@@ -110,7 +115,7 @@ pollMasters Delay{..} masterservers = do
 
 	xs	<- buildResponse
 	s	<- takeMVar state
-	let (nResp, nNot) = ssum s
+	let (nResp, nNot) = count (==Responded) s
 	return (PollResult xs nResp (nResp+nNot))
 
 	where
@@ -119,12 +124,12 @@ pollMasters Delay{..} masterservers = do
 		if b then forceIO m f else return Nothing
 	masterRoll ms host ~(!m, xs) | M.member host m = (m, xs)
 			          | otherwise       = (M.insert host (Pending ms) m, host:xs)
-	ssum = foldl' f (0, 0) where
-		f (!a, !b) Responded = (a+1, b)
-		f (!a, !b) _         = (a, b+1)
 
+count :: (Integral i, Foldable f) => (a -> Bool) -> f a -> (i, i)
+count p = foldl' go (0, 0) where
+    go (!a, !b) x | p x       = (a+1, b)
+                  | otherwise = (a, b+1)
 
-data Packet = Master !SockAddr ![SockAddr] | Tremulous !SockAddr !GameServer | Invalid
 
 parsePacket :: (ByteString, SockAddr) -> Packet
 parsePacket (content, host) = case B.stripPrefix "\xFF\xFF\xFF\xFF" content of

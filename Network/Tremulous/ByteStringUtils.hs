@@ -43,6 +43,6 @@ rebuild i f x0
 			go (p `plusPtr` 1) ps'' (n+1)
 
 rebuildC :: Int -> (Char -> ByteString -> (Char, ByteString)) -> ByteString -> ByteString
-rebuildC i f x0 = rebuild i f' x0
+rebuildC i f = rebuild i f'
 	where
 	f' w ps = let (a, b) = f (w2c w) ps in (c2w a, b)
