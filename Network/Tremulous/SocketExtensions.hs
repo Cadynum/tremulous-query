@@ -8,10 +8,11 @@ import Network.Socket
 deriving instance Ord SockAddr
 
 instance NFData SockAddr where
-	rnf (SockAddrInet (PortNum a) b) = rnf a `seq` rnf b
-	rnf (SockAddrInet6 (PortNum a) b c d) = rnf a `seq` rnf b `seq` rnf c `seq` rnf d
+    rnf (SockAddrInet (PortNum a) b) = rnf a `seq` rnf b
+    rnf (SockAddrInet6 (PortNum a) b c d) = rnf a `seq` rnf b
+                                            `seq` rnf c `seq` rnf d
 #if !defined(mingw32_HOST_OS) && !defined(__MINGW32__)
-	rnf (SockAddrUnix a) = rnf a
+    rnf (SockAddrUnix a) = rnf a
 #endif
 
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
