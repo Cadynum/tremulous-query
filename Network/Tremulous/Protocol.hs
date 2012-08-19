@@ -46,7 +46,7 @@ data GameServer = GameServer
     , version
     , mapname       :: !(Maybe TI)
     , slots         :: !Int
-    , privslots     :: !(Maybe Int)
+    , privslots     :: !Int
     , protected
     , unlagged      :: !Bool
     , timelimit
@@ -107,12 +107,12 @@ parsePlayers (Just p) xs = zipWithM parsePlayer (parseP p ++ repeat Unknown) xs
 parseCVars :: ByteString -> [(ByteString, ByteString)]
 parseCVars xs = f (splitfilter '\\' xs) where
     f (k:v:cs)  = (k, v) : f cs
-    f _     = []
+    f _         = []
 
 parseGameServer :: SockAddr -> ByteString -> Maybe GameServer
 parseGameServer address xs = case splitlines xs of
     (cvars:players) -> mkGameServer address players (parseCVars cvars)
-    _       -> Nothing
+    _               -> Nothing
 
 mkGameServer :: SockAddr
              -> [ByteString]
@@ -127,12 +127,13 @@ mkGameServer address rawplayers = tupleReader $ do
     gamemod         <- optionWith mkMod         "gamename"
     p               <- option                   "P"
     players         <- lift $ parsePlayers p rawplayers
-    protected       <- maybe False (/="0") <$> option "g_needpass"
-    privslots       <- optionWith maybeInt "sv_privateClients"
-    slots           <- maybe id subtract privslots <$>
-                           requireWith maybeInt "sv_maxclients"
-    suddendeath     <- optionWith maybeInt "g_suddenDeathTime"
-    unlagged        <- maybe False (/="0") <$> option "g_unlagged"
+    protected       <- mkBool <$> option        "g_needpass"
+    privslots       <- fromMaybe 0 <$> optionWith maybeInt
+                                                "sv_privateClients"
+    slots           <- subtract privslots <$> requireWith maybeInt
+                                                "sv_maxclients"
+    suddendeath     <- optionWith maybeInt      "g_suddenDeathTime"
+    unlagged        <- mkBool <$> option        "g_unlagged"
     return GameServer
         { gameping  = -1
         , nplayers  = P.length $ P.filter (\x -> ping x > 0) players
@@ -141,6 +142,7 @@ mkGameServer address rawplayers = tupleReader $ do
     where
     mkMod "base"    = Nothing
     mkMod a         = Just (mk a)
+    mkBool          = maybe False (/="0")
 
 
 parseMasterServer :: ByteString -> [SockAddr]

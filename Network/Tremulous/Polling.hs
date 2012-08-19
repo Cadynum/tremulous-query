@@ -133,7 +133,8 @@ pollMasters Delay{..} masterservers = do
                         -- This one is for you, devhc
                         if protocol x == masterProtocol then do
                             putMVar' state $ M.insert host Responded s
-                            return $ Just x{ gameping = fromIntegral (now - start) `quot` 1000 }
+                            let ping' = fromIntegral (now - start) `quot` 1000
+                            return $ Just x{gameping = ping'}
                         else do
                             putMVar' state $ M.insert host Broken s
                             return Nothing
