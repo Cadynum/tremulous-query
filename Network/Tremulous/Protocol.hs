@@ -51,7 +51,6 @@ data GameServer = GameServer
     , unlagged      :: !Bool
     , timelimit
     , suddendeath   :: !(Maybe Int)
-    -- nplayers excluding bots. A player is a bot if ping == 0
     , nplayers      :: !Int
     , players       :: ![Player]
     }
@@ -136,7 +135,7 @@ mkGameServer address rawplayers = tupleReader $ do
     unlagged        <- mkBool <$> option        "g_unlagged"
     return GameServer
         { gameping  = -1
-        , nplayers  = P.length $ P.filter (\x -> ping x > 0) players
+        , nplayers  = P.length players
         , ..
         }
     where
