@@ -109,9 +109,11 @@ parseCVars xs = f (splitfilter '\\' xs) where
     f _         = []
 
 parseGameServer :: SockAddr -> ByteString -> Maybe GameServer
-parseGameServer address xs = case splitlines xs of
-    (cvars:players) -> mkGameServer address players (parseCVars cvars)
-    _               -> Nothing
+parseGameServer address str = do
+    xs <- stripPrefix "\xFF\xFF\xFF\xFFstatusResponse" str
+    case splitlines xs of
+        (cvars:players) -> mkGameServer address players (parseCVars cvars)
+        _               -> Nothing
 
 mkGameServer :: SockAddr
              -> [ByteString]
@@ -144,9 +146,10 @@ mkGameServer address rawplayers = tupleReader $ do
     mkBool          = maybe False (/="0")
 
 
-parseMasterServer :: ByteString -> [SockAddr]
-parseMasterServer = fromMaybe [] . parseMaybe (A.many addr)
+parseMasterServer :: ByteString -> Maybe [SockAddr]
+parseMasterServer = parseMaybe (static *> A.many addr)
     where
+    static = string "\xFF\xFF\xFF\xFFgetserversResponse"
     addr = do
         char '\\'
         ip <- parseUInt32N

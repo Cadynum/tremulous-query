@@ -35,9 +35,6 @@ data State  = Pending MasterServer
             | Broken
     deriving Eq
 
-data Packet = Master !SockAddr ![SockAddr]
-            | Tremulous !SockAddr !GameServer
-            | Invalid
 
 mtu :: Int
 mtu = 2048
@@ -113,22 +110,22 @@ pollMasters Delay{..} masterservers = do
         ( masterAddress
         , QMaster (packetDuplication*4) masterProtocol )
 
-    buildOne sched state packet = do
-        now <- getMicroTime
-        case parsePacket packet of
-            Master host xs -> do
-                forM_ (findMaster host) $ \masterServer -> do
-                    deleteScheduled sched host
-                    s <- takeMVar state
-                    let (s', delta) = foldr (masterRoll masterServer) (s, []) xs
-                    addScheduledInstant sched $ map (,QGame packetDuplication) delta
-                    putMVar' state s'
-                return Nothing
 
-            Tremulous host x -> do
+    buildOne sched state (content, host)
+        | P.Just msrv <- findMaster host = do
+            whenJust (parseMasterServer content) $ \xs -> do
+                deleteScheduled sched host
                 s <- takeMVar state
-                case M.lookup host s of
-                    P.Just (Requested start MasterServer{..}) -> do
+                let (s', delta) = foldr (masterRoll msrv) (s, []) xs
+                addScheduledInstant sched $ map (,QGame packetDuplication) delta
+                putMVar' state s'
+            return Nothing
+        | otherwise = do
+            now <- getMicroTime
+            s <- takeMVar state
+            case M.lookup host s of
+                P.Just (Requested start MasterServer{..})
+                    | Just x <- parseGameServer host content -> do
                         deleteScheduled sched host
                         -- This one is for you, devhc
                         if protocol x == masterProtocol then do
@@ -138,11 +135,10 @@ pollMasters Delay{..} masterservers = do
                         else do
                             putMVar' state $ M.insert host Broken s
                             return Nothing
-                    _ -> do
-                        putMVar' state s
-                        return Nothing
+                _ -> do
+                    putMVar' state s
+                    return Nothing
 
-            Invalid -> return Nothing
 
 
     findMaster host = find (\x -> host == masterAddress x) masterservers
@@ -150,20 +146,12 @@ pollMasters Delay{..} masterservers = do
       | M.member host m = (m, xs)
       | otherwise       = (M.insert host (Pending ms) m, host:xs)
 
+
 count :: (Integral i, Foldable f) => (a -> Bool) -> f a -> (i, i)
 count p = foldl' go (0, 0) where
     go (!a, !b) x | p x       = (a+1, b)
                   | otherwise = (a, b+1)
 
-
-parsePacket :: (ByteString, SockAddr) -> Packet
-parsePacket (content, host) = case stripPrefix "\xFF\xFF\xFF\xFF" content of
-    Just a | Just x <- parseServer a    -> Tremulous host x
-           | Just x <- parseMaster a    -> Master host x
-    _                                   -> Invalid
-    where
-    parseMaster x = parseMasterServer <$> stripPrefix "getserversResponse" x
-    parseServer x = parseGameServer host =<< stripPrefix "statusResponse" x
 
 pollOne :: Delay -> SockAddr -> IO (Maybe GameServer)
 pollOne Delay{..} sockaddr = mkS $ \sock -> do
@@ -181,12 +169,10 @@ pollOne Delay{..} sockaddr = mkS $ \sock -> do
     poll    <- ioMaybe $ recv sock mtu <* killThread tid
     stop    <- getMicroTime
     let gameping = fromIntegral (stop - start) `quot` 1000
-    return $ (\x -> x {gameping}) <$>
-        (parseGameServer sockaddr =<< isProper =<< poll)
+    return $ (\x -> x {gameping}) <$> (parseGameServer sockaddr =<< poll)
     where
     mkS = handle err . bracket (socket AF_INET Datagram defaultProtocol) sClose
     err (_ :: IOError) = return Nothing
-    isProper = stripPrefix "\xFF\xFF\xFF\xFFstatusResponse"
 
 ioMaybe :: IO a -> IO (Maybe a)
 ioMaybe f = catch (Just <$> f) (\(_ :: IOError) -> return Nothing)
