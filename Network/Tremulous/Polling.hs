@@ -22,7 +22,6 @@ import Network.Tremulous.StrictMaybe
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Network.Tremulous.Protocol
-import Network.Tremulous.ByteStringUtils as B
 import Network.Tremulous.MicroTime
 import Network.Tremulous.Scheduler
 
