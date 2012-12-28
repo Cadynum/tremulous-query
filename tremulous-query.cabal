@@ -12,7 +12,7 @@ Description:            A library for polling servers from the game Tremulous.
 
 Cabal-Version:          >= 1.10
 Build-Type:             Simple
-Tested-With:            GHC==7.4.2
+Tested-With:            GHC==7.6.1
 
 Source-Repository head
   Type:                 git
