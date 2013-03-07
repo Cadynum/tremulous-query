@@ -3,7 +3,7 @@ module Network.Tremulous.Polling (
     , pollOne
 ) where
 import Prelude hiding (all, concat, mapM_, elem, sequence_, concatMap
-    , catch, Maybe(..), maybe, foldr)
+    , Maybe(..), maybe, foldr)
 import qualified Data.Maybe as P
 
 import Control.Monad (when)

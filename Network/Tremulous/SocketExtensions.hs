@@ -1,11 +1,9 @@
-{-# LANGUAGE CPP, StandaloneDeriving #-}
+{-# LANGUAGE CPP #-}
 module Network.Tremulous.SocketExtensions where
 import Prelude as P
 import Foreign
 import Control.DeepSeq
 import Network.Socket
-
-deriving instance Ord SockAddr
 
 instance NFData SockAddr where
     rnf (SockAddrInet (PortNum a) b) = rnf a `seq` rnf b
