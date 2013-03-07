@@ -25,7 +25,7 @@ Library
                         RecordWildCards GADTs ScopedTypeVariables
                         OverloadedStrings DeriveDataTypeable
 
-  Other-Extensions:     CPP StandaloneDeriving
+  Other-Extensions:     CPP
 
   Exposed-Modules:      Network.Tremulous.Protocol
                         Network.Tremulous.Polling
