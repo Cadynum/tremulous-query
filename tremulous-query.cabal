@@ -38,7 +38,7 @@ Library
                         Network.Tremulous.StrictMaybe
                         Network.Tremulous.TupleReader
 
-  Build-Depends:        base>=4.5 && < 5, network >= 2.4, containers,
+  Build-Depends:        base>=4.5 && < 5, network>=2.4, containers,
                         bytestring, attoparsec>=0.9, mtl, deepseq
   if os(windows)
       Build-Depends:    Win32
